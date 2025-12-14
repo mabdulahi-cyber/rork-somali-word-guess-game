@@ -1,11 +1,9 @@
 import React, { useEffect } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AppErrorBoundary } from "@/components/ErrorBoundary";
 import { GameProvider } from "@/contexts/game-context";
-import { trpc, trpcClient } from "@/lib/trpc";
 
 if (!(React as any).use) {
   (React as any).use = function <T>(promise: Promise<T> | T): T {
@@ -19,8 +17,6 @@ if (!(React as any).use) {
 // Avoid calling async SplashScreen APIs during module evaluation to prevent setState-on-unmounted warnings in dev overlays.
 // Expo will keep the splash visible until hideAsync is called.
 
-
-const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   return (
@@ -52,15 +48,11 @@ export default function RootLayout() {
 
   return (
     <AppErrorBoundary>
-      <trpc.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}>
-          <GameProvider>
-            <GestureHandlerRootView style={{ flex: 1 }}>
-              <RootLayoutNav />
-            </GestureHandlerRootView>
-          </GameProvider>
-        </QueryClientProvider>
-      </trpc.Provider>
+      <GameProvider>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <RootLayoutNav />
+        </GestureHandlerRootView>
+      </GameProvider>
     </AppErrorBoundary>
   );
 }
