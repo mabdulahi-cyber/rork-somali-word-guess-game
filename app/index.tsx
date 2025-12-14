@@ -8,12 +8,16 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Sparkles, Users, Shield, Mic, MicOff } from 'lucide-react-native';
+import { Sparkles, Users, Shield, Mic, MicOff, Copy, ArrowLeft } from 'lucide-react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useGame } from '@/contexts/game-context';
 import type { Team } from '@/types/game';
+
+type FlowState = 'initial' | 'create' | 'join' | 'lobby';
 
 export default function LobbyScreen() {
   const router = useRouter();
@@ -28,6 +32,7 @@ export default function LobbyScreen() {
     isRoomLoading,
   } = useGame();
 
+  const [flowState, setFlowState] = useState<FlowState>('initial');
   const [playerName, setPlayerName] = useState<string>('');
   const [joinCode, setJoinCode] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -38,6 +43,7 @@ export default function LobbyScreen() {
       setIsSubmitting(true);
       setErrorMessage('');
       await createRoom(playerName);
+      setFlowState('lobby');
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to create room');
     } finally {
@@ -50,11 +56,28 @@ export default function LobbyScreen() {
       setIsSubmitting(true);
       setErrorMessage('');
       await joinRoom(playerName, joinCode);
+      setFlowState('lobby');
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to join room');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleCopyRoomCode = async () => {
+    if (roomCode) {
+      await Clipboard.setStringAsync(roomCode);
+      if (Platform.OS === 'web') {
+        Alert.alert('Copied!', `Room code ${roomCode} copied to clipboard`);
+      }
+    }
+  };
+
+  const handleBack = () => {
+    setFlowState('initial');
+    setPlayerName('');
+    setJoinCode('');
+    setErrorMessage('');
   };
 
   const handleTeamSelect = async (team: Team) => {
@@ -145,139 +168,247 @@ export default function LobbyScreen() {
     );
   };
 
+  const renderInitialScreen = () => (
+    <View style={styles.content}>
+      <View style={styles.headerContainer}>
+        <Sparkles size={48} color="#ffd369" strokeWidth={2} />
+        <Text style={styles.title}>Somali Lobby</Text>
+        <Text style={styles.subtitle}>Create or join a real-time match</Text>
+      </View>
+
+      <View style={styles.initialButtonContainer}>
+        <Pressable
+          testID="create-game-button"
+          style={({ pressed }) => [
+            styles.largeButton,
+            styles.primaryButton,
+            pressed && styles.buttonPressed,
+          ]}
+          onPress={() => setFlowState('create')}
+        >
+          <Text style={[styles.largeButtonText, styles.buttonTextDark]}>Create Game</Text>
+        </Pressable>
+        <Pressable
+          testID="join-game-button"
+          style={({ pressed }) => [
+            styles.largeButton,
+            styles.secondaryButton,
+            pressed && styles.buttonPressed,
+          ]}
+          onPress={() => setFlowState('join')}
+        >
+          <Text style={styles.largeButtonText}>Join Game</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  const renderCreateFlow = () => (
+    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <Pressable onPress={handleBack} style={styles.backButton}>
+        <ArrowLeft size={24} color="#ffd369" />
+        <Text style={styles.backButtonText}>Back</Text>
+      </Pressable>
+
+      <View style={styles.headerContainer}>
+        <Sparkles size={48} color="#ffd369" strokeWidth={2} />
+        <Text style={styles.title}>Create Game</Text>
+        <Text style={styles.subtitle}>Set up a new room for your team</Text>
+      </View>
+
+      <View style={styles.formCard}>
+        <Text style={styles.cardTitle}>Player Name</Text>
+        <TextInput
+          testID="player-name-input"
+          style={styles.input}
+          placeholder="Enter your player name"
+          placeholderTextColor="#8087a2"
+          value={playerName}
+          onChangeText={setPlayerName}
+          autoFocus
+        />
+
+        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+
+        <Pressable
+          testID="submit-create-button"
+          style={({ pressed }) => [
+            styles.largeButton,
+            styles.primaryButton,
+            pressed && styles.buttonPressed,
+            (isSubmitting || !playerName.trim()) && styles.buttonDisabled,
+          ]}
+          onPress={handleCreateGame}
+          disabled={isSubmitting || !playerName.trim()}
+        >
+          <Text style={[styles.largeButtonText, styles.buttonTextDark]}>
+            {isSubmitting ? 'Creating...' : 'Create Room'}
+          </Text>
+        </Pressable>
+      </View>
+    </ScrollView>
+  );
+
+  const renderJoinFlow = () => (
+    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <Pressable onPress={handleBack} style={styles.backButton}>
+        <ArrowLeft size={24} color="#ffd369" />
+        <Text style={styles.backButtonText}>Back</Text>
+      </Pressable>
+
+      <View style={styles.headerContainer}>
+        <Sparkles size={48} color="#ffd369" strokeWidth={2} />
+        <Text style={styles.title}>Join Game</Text>
+        <Text style={styles.subtitle}>Enter room code to join</Text>
+      </View>
+
+      <View style={styles.formCard}>
+        <Text style={styles.cardTitle}>Player Name</Text>
+        <TextInput
+          testID="player-name-input"
+          style={styles.input}
+          placeholder="Enter your player name"
+          placeholderTextColor="#8087a2"
+          value={playerName}
+          onChangeText={setPlayerName}
+          autoFocus
+        />
+
+        <Text style={styles.cardTitle}>Room Code</Text>
+        <TextInput
+          testID="room-code-input"
+          style={styles.input}
+          placeholder="Enter room code"
+          placeholderTextColor="#8087a2"
+          autoCapitalize="characters"
+          value={joinCode}
+          onChangeText={setJoinCode}
+        />
+
+        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+
+        <Pressable
+          testID="submit-join-button"
+          style={({ pressed }) => [
+            styles.largeButton,
+            styles.primaryButton,
+            pressed && styles.buttonPressed,
+            (isSubmitting || !playerName.trim() || !joinCode.trim()) && styles.buttonDisabled,
+          ]}
+          onPress={handleJoinGame}
+          disabled={isSubmitting || !playerName.trim() || !joinCode.trim()}
+        >
+          <Text style={[styles.largeButtonText, styles.buttonTextDark]}>
+            {isSubmitting ? 'Joining...' : 'Join Room'}
+          </Text>
+        </Pressable>
+      </View>
+    </ScrollView>
+  );
+
+  const renderLobbyScreen = () => (
+    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <View style={styles.headerContainer}>
+        <Sparkles size={48} color="#ffd369" strokeWidth={2} />
+        <Text style={styles.title}>Game Lobby</Text>
+        <Text style={styles.subtitle}>Prepare your team</Text>
+      </View>
+
+      {roomCode ? (
+        <View style={styles.formCard}>
+          <Text style={styles.cardTitle}>Room Code</Text>
+          <View style={styles.roomCodeContainer}>
+            <Text style={styles.roomCodeText}>{roomCode}</Text>
+            <Pressable
+              testID="copy-room-code-button"
+              style={({ pressed }) => [
+                styles.copyButton,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={handleCopyRoomCode}
+            >
+              <Copy size={20} color="#16213e" />
+              <Text style={styles.copyButtonText}>Copy Code</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.roomCodeHint}>Share this code with your team</Text>
+        </View>
+      ) : null}
+
+      {roomState ? (
+        <View style={styles.formCard}>
+          <Text style={styles.cardTitle}>Prepare Your Team</Text>
+          <Text style={styles.cardDescription}>
+            Choose your team and assign the Scrum Master before jumping into the board.
+          </Text>
+
+          <View style={styles.teamRow}>
+            <Pressable
+              testID="select-team-red"
+              onPress={() => handleTeamSelect('red')}
+              style={[styles.teamButton, currentPlayer?.team === 'red' && styles.teamButtonActiveRed]}
+            >
+              <Text style={styles.teamText}>Join Red Team</Text>
+            </Pressable>
+            <Pressable
+              testID="select-team-blue"
+              onPress={() => handleTeamSelect('blue')}
+              style={[styles.teamButton, currentPlayer?.team === 'blue' && styles.teamButtonActiveBlue]}
+            >
+              <Text style={styles.teamText}>Join Blue Team</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.roleRow}>
+            <Pressable
+              testID="become-scrum-master-button"
+              onPress={handleSetScrumMaster}
+              style={[styles.roleButton, roomState.scrumMasterId === currentPlayer?.id && styles.roleButtonActive]}
+            >
+              <Text style={styles.roleText}>
+                {roomState.scrumMasterId ? 'Scrum Master Selected' : 'Become Scrum Master'}
+              </Text>
+            </Pressable>
+            <Pressable
+              testID="become-guesser-button"
+              onPress={handleSetGuesser}
+              style={[styles.roleButton, currentPlayer?.role === 'guesser' && styles.roleButtonActive]}
+            >
+              <Text style={styles.roleText}>Play as Guesser</Text>
+            </Pressable>
+          </View>
+
+          <Pressable
+            testID="enter-game-button"
+            style={({ pressed }) => [
+              styles.enterGameButton,
+              pressed && canEnterGame && styles.buttonPressed,
+              (!canEnterGame || isRoomLoading) && styles.buttonDisabled,
+            ]}
+            disabled={!canEnterGame || isRoomLoading}
+            onPress={handleEnterGame}
+          >
+            <Text style={styles.enterGameText}>
+              {canEnterGame ? 'Enter Game' : 'Pick a team + Scrum Master'}
+            </Text>
+          </Pressable>
+
+          {renderPlayerList()}
+        </View>
+      ) : null}
+    </ScrollView>
+  );
+
   return (
     <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={styles.container}>
       <KeyboardAvoidingView
         style={styles.keyboardContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={styles.headerContainer}>
-            <Sparkles size={48} color="#ffd369" strokeWidth={2} />
-            <Text style={styles.title}>Somali Lobby</Text>
-            <Text style={styles.subtitle}>Create or join a real-time match</Text>
-          </View>
-
-          <View style={styles.formCard}>
-            <Text style={styles.cardTitle}>Your Identity</Text>
-            <TextInput
-              testID="player-name-input"
-              style={styles.input}
-              placeholder="Enter your player name"
-              placeholderTextColor="#8087a2"
-              value={playerName}
-              onChangeText={setPlayerName}
-            />
-            <TextInput
-              testID="room-code-input"
-              style={styles.input}
-              placeholder="Enter room code to join"
-              placeholderTextColor="#8087a2"
-              autoCapitalize="characters"
-              value={joinCode}
-              onChangeText={setJoinCode}
-            />
-
-            {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-
-            <View style={styles.buttonRow}>
-              <Pressable
-                testID="create-game-button"
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  pressed && styles.buttonPressed,
-                  isSubmitting && styles.buttonDisabled,
-                ]}
-                onPress={handleCreateGame}
-                disabled={isSubmitting || !playerName.trim()}
-              >
-                <Text style={[styles.buttonText, styles.buttonTextDark]}>Create Game</Text>
-              </Pressable>
-              <Pressable
-                testID="join-game-button"
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed && styles.buttonPressed,
-                  isSubmitting && styles.buttonDisabled,
-                ]}
-                onPress={handleJoinGame}
-                disabled={isSubmitting || !playerName.trim() || !joinCode.trim()}
-              >
-                <Text style={styles.buttonText}>Join Game</Text>
-              </Pressable>
-            </View>
-
-            {roomCode ? (
-              <View style={styles.roomCodeContainer}>
-                <Text style={styles.roomCodeLabel}>Room Code</Text>
-                <Text style={styles.roomCodeText}>{roomCode}</Text>
-                <Text style={styles.roomCodeHint}>Share this code with your team</Text>
-              </View>
-            ) : null}
-          </View>
-
-          {roomState ? (
-            <View style={styles.formCard}>
-              <Text style={styles.cardTitle}>Prepare Your Team</Text>
-              <Text style={styles.cardDescription}>
-                Choose your team and assign the Scrum Master before jumping into the board.
-              </Text>
-
-              <View style={styles.teamRow}>
-                <Pressable
-                  testID="select-team-red"
-                  onPress={() => handleTeamSelect('red')}
-                  style={[styles.teamButton, currentPlayer?.team === 'red' && styles.teamButtonActiveRed]}
-                >
-                  <Text style={styles.teamText}>Join Red Team</Text>
-                </Pressable>
-                <Pressable
-                  testID="select-team-blue"
-                  onPress={() => handleTeamSelect('blue')}
-                  style={[styles.teamButton, currentPlayer?.team === 'blue' && styles.teamButtonActiveBlue]}
-                >
-                  <Text style={styles.teamText}>Join Blue Team</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.roleRow}>
-                <Pressable
-                  testID="become-scrum-master-button"
-                  onPress={handleSetScrumMaster}
-                  style={[styles.roleButton, roomState.scrumMasterId === currentPlayer?.id && styles.roleButtonActive]}
-                >
-                  <Text style={styles.roleText}>
-                    {roomState.scrumMasterId ? 'Scrum Master Selected' : 'Become Scrum Master'}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  testID="become-guesser-button"
-                  onPress={handleSetGuesser}
-                  style={[styles.roleButton, currentPlayer?.role === 'guesser' && styles.roleButtonActive]}
-                >
-                  <Text style={styles.roleText}>Play as Guesser</Text>
-                </Pressable>
-              </View>
-
-              <Pressable
-                testID="enter-game-button"
-                style={({ pressed }) => [
-                  styles.enterGameButton,
-                  pressed && canEnterGame && styles.buttonPressed,
-                  (!canEnterGame || isRoomLoading) && styles.buttonDisabled,
-                ]}
-                disabled={!canEnterGame || isRoomLoading}
-                onPress={handleEnterGame}
-              >
-                <Text style={styles.enterGameText}>
-                  {canEnterGame ? 'Enter Game' : 'Pick a team + Scrum Master'}
-                </Text>
-              </Pressable>
-
-              {renderPlayerList()}
-            </View>
-          ) : null}
-        </ScrollView>
+        {flowState === 'initial' && renderInitialScreen()}
+        {flowState === 'create' && renderCreateFlow()}
+        {flowState === 'join' && renderJoinFlow()}
+        {flowState === 'lobby' && renderLobbyScreen()}
       </KeyboardAvoidingView>
     </LinearGradient>
   );
@@ -294,6 +425,60 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 80,
     paddingBottom: 40,
+    flexGrow: 1,
+  },
+  initialButtonContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 16,
+    paddingHorizontal: 12,
+  },
+  largeButton: {
+    paddingVertical: 18,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  largeButtonText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 24,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffd369',
+  },
+  roomCodeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 211, 105, 0.08)',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 211, 105, 0.3)',
+    marginBottom: 12,
+  },
+  copyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ffd369',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  copyButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#16213e',
   },
   headerContainer: {
     alignItems: 'center',
@@ -377,26 +562,11 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.5,
   },
-  roomCodeContainer: {
-    marginTop: 20,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 211, 105, 0.08)',
-    borderRadius: 16,
-    paddingVertical: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 211, 105, 0.3)',
-  },
-  roomCodeLabel: {
-    fontSize: 12,
-    color: '#ffd369',
-    letterSpacing: 1,
-    marginBottom: 6,
-  },
   roomCodeText: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
     color: '#ffffff',
-    letterSpacing: 4,
+    letterSpacing: 3,
   },
   roomCodeHint: {
     fontSize: 12,
