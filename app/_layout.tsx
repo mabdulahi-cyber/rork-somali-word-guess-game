@@ -7,18 +7,13 @@ import { AppErrorBoundary } from "@/components/ErrorBoundary";
 import { GameProvider } from "@/contexts/game-context";
 import { trpc, trpcClient } from "@/lib/trpc";
 
-const reactAny = React as unknown as { use?: (usable: unknown) => unknown };
-if (typeof reactAny.use !== "function") {
-  reactAny.use = (usable: unknown) => {
-    const maybeThen = usable as { then?: (onFulfilled?: unknown, onRejected?: unknown) => unknown };
-
-    if (maybeThen && typeof maybeThen.then === "function") {
-      throw usable;
+if (!(React as any).use) {
+  (React as any).use = function <T>(promise: Promise<T> | T): T {
+    if (promise && typeof (promise as any).then === 'function') {
+      throw promise;
     }
-
-    return usable;
+    return promise as T;
   };
-  console.warn("React.use() shim installed for React 18 compatibility.");
 }
 
 // Avoid calling async SplashScreen APIs during module evaluation to prevent setState-on-unmounted warnings in dev overlays.
