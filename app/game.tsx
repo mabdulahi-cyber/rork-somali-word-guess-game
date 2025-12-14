@@ -5,7 +5,7 @@ import {
   StyleSheet,
   Pressable,
   Dimensions,
-  ScrollView,
+
   Animated,
   TextInput,
   KeyboardAvoidingView,
@@ -379,11 +379,7 @@ export default function GameScreen() {
         {renderPlayerList()}
       </LinearGradient>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
+      <View style={styles.gameBoard}>
         <View style={styles.gridContainer}>
           {roomState.cards.map((card) => (
             <WordCard
@@ -412,7 +408,7 @@ export default function GameScreen() {
             </LinearGradient>
           </Pressable>
         )}
-      </ScrollView>
+      </View>
 
       {!roomState.winner && (
         <View style={styles.scrumMasterPanel}>
@@ -679,12 +675,12 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 10,
   },
-  scrollView: {
+  gameBoard: {
     flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 32,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
+    justifyContent: 'center',
   },
   gridContainer: {
     flexDirection: 'row',
