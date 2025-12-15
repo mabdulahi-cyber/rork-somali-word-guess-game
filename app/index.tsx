@@ -83,6 +83,7 @@ export default function LobbyScreen() {
   const handleTeamSelect = async (team: Team) => {
     try {
       await selectTeam(team);
+      await setRole('guesser');
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to select team');
     }
@@ -106,9 +107,9 @@ export default function LobbyScreen() {
 
   const canEnterGame = useMemo(() => {
     if (!roomState || !currentPlayer) return false;
-    if (!currentPlayer.team) return false;
-    const teamSpymasterKey = currentPlayer.team === 'red' ? 'redSpymasterId' : 'blueSpymasterId';
-    return Boolean(roomState[teamSpymasterKey]);
+    const hasName = Boolean(currentPlayer.name?.trim());
+    const hasTeam = Boolean(currentPlayer.team);
+    return hasName && hasTeam;
   }, [currentPlayer, roomState]);
 
   const handleEnterGame = () => {
@@ -340,9 +341,7 @@ export default function LobbyScreen() {
       {roomState ? (
         <View style={styles.formCard}>
           <Text style={styles.cardTitle}>Prepare Your Team</Text>
-          <Text style={styles.cardDescription}>
-            Choose your team and role before jumping into the board.
-          </Text>
+          <Text style={styles.cardDescription}>Choose your team (role optional).</Text>
 
           <View style={styles.teamRow}>
             <Pressable
@@ -390,10 +389,18 @@ export default function LobbyScreen() {
             disabled={!canEnterGame || isRoomLoading}
             onPress={handleEnterGame}
           >
-            <Text style={styles.enterGameText}>
-              {canEnterGame ? 'Enter Game' : 'Pick a team + Spymaster'}
-            </Text>
+            <Text style={styles.enterGameText}>Enter Game</Text>
           </Pressable>
+
+          {!canEnterGame ? (
+            <Text style={styles.errorText}>
+              {!currentPlayer?.name?.trim()
+                ? 'Enter your name to continue'
+                : !currentPlayer?.team
+                ? 'Pick a team to continue'
+                : ''}
+            </Text>
+          ) : null}
 
           {renderPlayerList()}
         </View>
