@@ -43,6 +43,7 @@ const createNewGameState = (): GameState => {
     word,
     type: shuffledTypes[index],
     revealed: false,
+    revealedByTeam: null,
   }));
 
   return {
@@ -226,6 +227,7 @@ export const roomStore = {
     }
 
     card.revealed = true;
+    card.revealedByTeam = room.currentTeam;
 
     if (card.type === "assassin") {
       room.winner = "assassinated";

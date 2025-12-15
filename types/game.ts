@@ -7,6 +7,7 @@ export interface Card {
   word: string;
   type: CardType;
   revealed: boolean;
+  revealedByTeam: Team | null;
 }
 
 export interface Hint {

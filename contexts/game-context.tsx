@@ -62,6 +62,7 @@ const buildNewDeck = () => {
     word,
     type: types[idx] ?? "neutral",
     revealed: false,
+    revealedByTeam: null,
   }));
 
   const redCardsLeft = cards.filter((c) => c.type === "red").length;
@@ -226,10 +227,15 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       setRoomState((prev) => {
         if (!prev) throw new Error("Room not found");
 
+        const currentPlayerData = prev.players.find((p) => p.id === playerId);
+        if (!currentPlayerData || currentPlayerData.team !== prev.currentTeam) return prev;
+
         const target = prev.cards.find((c) => c.id === cardId);
         if (!target || target.revealed) return prev;
 
-        const cards = prev.cards.map((c) => (c.id === cardId ? { ...c, revealed: true } : c));
+        const cards = prev.cards.map((c) => 
+          c.id === cardId ? { ...c, revealed: true, revealedByTeam: prev.currentTeam } : c
+        );
 
         const redCardsLeft =
           target.type === "red" ? Math.max(0, prev.redCardsLeft - 1) : prev.redCardsLeft;

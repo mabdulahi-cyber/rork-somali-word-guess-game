@@ -27,9 +27,10 @@ interface WordCardProps {
   onPress: () => void;
   disabled: boolean;
   cardSize: number;
+  isSpymaster: boolean;
 }
 
-function WordCard({ card, onPress, disabled, cardSize }: WordCardProps) {
+function WordCard({ card, onPress, disabled, cardSize, isSpymaster }: WordCardProps) {
   const [scaleAnim] = useState(new Animated.Value(1));
 
   const handlePressIn = () => {
@@ -47,30 +48,44 @@ function WordCard({ card, onPress, disabled, cardSize }: WordCardProps) {
   };
 
   const getCardColors = (): [string, string] => {
-    if (!card.revealed) {
-      return ['#e8e8e8', '#d0d0d0'];
+    if (card.revealed) {
+      switch (card.type) {
+        case 'red':
+          return ['#ff6b6b', '#ee5a52'];
+        case 'blue':
+          return ['#4ecdc4', '#44a7a0'];
+        case 'neutral':
+          return ['#f4e4c1', '#e6d5a8'];
+        case 'assassin':
+          return ['#2d3436', '#1a1d1e'];
+        default:
+          return ['#e8e8e8', '#d0d0d0'];
+      }
     }
 
-    switch (card.type) {
-      case 'red':
-        return ['#ff6b6b', '#ee5a52'];
-      case 'blue':
-        return ['#4ecdc4', '#44a7a0'];
-      case 'neutral':
-        return ['#f4e4c1', '#e6d5a8'];
-      case 'assassin':
-        return ['#2d3436', '#1a1d1e'];
-      default:
-        return ['#e8e8e8', '#d0d0d0'];
+    if (isSpymaster) {
+      switch (card.type) {
+        case 'red':
+          return ['#ff6b6b', '#ee5a52'];
+        case 'blue':
+          return ['#4ecdc4', '#44a7a0'];
+        case 'neutral':
+          return ['#f4e4c1', '#e6d5a8'];
+        case 'assassin':
+          return ['#2d3436', '#1a1d1e'];
+        default:
+          return ['#e8e8e8', '#d0d0d0'];
+      }
     }
+
+    return ['#e8e8e8', '#d0d0d0'];
   };
 
   const getTextColor = (): string => {
-    if (!card.revealed) {
-      return '#2d3436';
+    if (card.revealed || isSpymaster) {
+      return card.type === 'assassin' ? '#ffffff' : '#2d3436';
     }
-
-    return card.type === 'assassin' ? '#ffffff' : '#2d3436';
+    return '#2d3436';
   };
 
   const colors = getCardColors();
@@ -103,8 +118,13 @@ function WordCard({ card, onPress, disabled, cardSize }: WordCardProps) {
           <Text style={[styles.cardText, { color: getTextColor() }]}>
             {card.word}
           </Text>
-          {card.revealed && card.type === 'assassin' && (
+          {(card.revealed || isSpymaster) && card.type === 'assassin' && (
             <Text style={styles.assassinEmoji}>💀</Text>
+          )}
+          {!card.revealed && isSpymaster && (
+            <View style={styles.spymasterOverlay}>
+              <Text style={styles.spymasterLabel}>KEY</Text>
+            </View>
           )}
         </LinearGradient>
       </Pressable>
@@ -419,6 +439,7 @@ export default function GameScreen() {
                 onPress={() => handleCardPress(card.id)}
                 disabled={card.revealed}
                 cardSize={cardSize}
+                isSpymaster={isScrumMaster}
               />
             ))}
           </View>
@@ -930,5 +951,20 @@ const styles = StyleSheet.create({
   helperText: {
     color: '#c0c4d6',
     fontSize: 14,
+  },
+  spymasterOverlay: {
+    position: 'absolute',
+    bottom: 2,
+    left: 2,
+    backgroundColor: 'rgba(255, 211, 105, 0.9)',
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  spymasterLabel: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#16213e',
+    letterSpacing: 0.5,
   },
 });
