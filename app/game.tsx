@@ -170,9 +170,10 @@ export default function GameScreen() {
     }
   }, [roomCode, router]);
 
-  const isScrumMaster = useMemo(() => {
-    if (!roomState || !currentPlayer) return false;
-    return currentPlayer.role === 'scrumMaster' && roomState.scrumMasterId === currentPlayer.id;
+  const isSpymaster = useMemo(() => {
+    if (!roomState || !currentPlayer || !currentPlayer.team) return false;
+    const teamSpymasterKey = currentPlayer.team === 'red' ? 'redSpymasterId' : 'blueSpymasterId';
+    return currentPlayer.role === 'spymaster' && roomState[teamSpymasterKey] === currentPlayer.id;
   }, [currentPlayer, roomState]);
 
   const canGuess = useMemo(() => {
@@ -247,7 +248,7 @@ export default function GameScreen() {
   };
 
   const handleEndTurn = async () => {
-    if (!isScrumMaster) {
+    if (!isSpymaster) {
       return;
     }
     try {
@@ -299,7 +300,7 @@ export default function GameScreen() {
         {roomState.players.map((player: Player) => (
           <View
             key={player.id}
-            style={[styles.playerChip, player.role === 'scrumMaster' && styles.playerChipActive]}
+            style={[styles.playerChip, player.role === 'spymaster' && styles.playerChipActive]}
           >
             <View
               style={[
@@ -315,7 +316,7 @@ export default function GameScreen() {
               ]}
             />
             <Text style={styles.playerChipText}>{player.name}</Text>
-            {player.role === 'scrumMaster' && <Text style={styles.playerRoleTag}>SM</Text>}
+            {player.role === 'spymaster' && <Text style={styles.playerRoleTag}>SPY</Text>}
             {player.micMuted ? (
               <MicOff size={16} color="#ff6b6b" />
             ) : (
@@ -439,7 +440,7 @@ export default function GameScreen() {
                 onPress={() => handleCardPress(card.id)}
                 disabled={card.revealed}
                 cardSize={cardSize}
-                isSpymaster={isScrumMaster}
+                isSpymaster={isSpymaster}
               />
             ))}
           </View>
@@ -447,8 +448,8 @@ export default function GameScreen() {
           {!roomState.winner && (
             <Pressable
               onPress={handleEndTurn}
-              style={[styles.endTurnButton, !isScrumMaster && styles.disabledButton, { width: boardWidth }]}
-              disabled={!isScrumMaster}
+              style={[styles.endTurnButton, !isSpymaster && styles.disabledButton, { width: boardWidth }]}
+              disabled={!isSpymaster}
               testID="end-turn-button"
             >
               <LinearGradient
@@ -456,7 +457,7 @@ export default function GameScreen() {
                 style={styles.endTurnGradient}
               >
                 <Text style={styles.endTurnText}>
-                  {isScrumMaster ? 'End Turn' : 'Only Scrum Master can end turn'}
+                  {isSpymaster ? 'End Turn' : 'Only Spymaster can end turn'}
                 </Text>
               </LinearGradient>
             </Pressable>
@@ -470,9 +471,9 @@ export default function GameScreen() {
             colors={['rgba(26, 26, 46, 0.98)', 'rgba(22, 33, 62, 0.98)']}
             style={styles.panelGradient}
           >
-            <Text style={styles.panelTitle}>Scrum Master</Text>
+            <Text style={styles.panelTitle}>Spymaster</Text>
             {hintError ? <Text style={styles.errorText}>{hintError}</Text> : null}
-            {isScrumMaster ? (
+            {isSpymaster ? (
               <View style={styles.inputRow}>
                 <View style={styles.hintInputContainer}>
                   <Text style={styles.inputLabel}>Hint Word</Text>
@@ -534,7 +535,7 @@ export default function GameScreen() {
                 </Pressable>
               </View>
             ) : (
-              <Text style={styles.helperText}>Only the Scrum Master can send hints right now.</Text>
+              <Text style={styles.helperText}>Only the Spymaster can send hints right now.</Text>
             )}
           </LinearGradient>
         </View>

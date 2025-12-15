@@ -90,7 +90,7 @@ export default function LobbyScreen() {
 
   const handleSetScrumMaster = async () => {
     try {
-      await setRole('scrumMaster');
+      await setRole('spymaster');
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to set role');
     }
@@ -106,7 +106,9 @@ export default function LobbyScreen() {
 
   const canEnterGame = useMemo(() => {
     if (!roomState || !currentPlayer) return false;
-    return Boolean(currentPlayer.team && roomState.scrumMasterId);
+    if (!currentPlayer.team) return false;
+    const teamSpymasterKey = currentPlayer.team === 'red' ? 'redSpymasterId' : 'blueSpymasterId';
+    return Boolean(roomState[teamSpymasterKey]);
   }, [currentPlayer, roomState]);
 
   const handleEnterGame = () => {
@@ -133,7 +135,7 @@ export default function LobbyScreen() {
               key={player.id}
               style={[
                 styles.playerRow,
-                player.role === 'scrumMaster' && styles.playerRowScrumMaster,
+                player.role === 'spymaster' && styles.playerRowSpymaster,
               ]}
             >
               <View
@@ -150,10 +152,10 @@ export default function LobbyScreen() {
                 ]}
               />
               <Text style={styles.playerNameText}>{player.name}</Text>
-              {player.role === 'scrumMaster' && (
+              {player.role === 'spymaster' && (
                 <View style={styles.playerBadge}>
                   <Shield size={14} color="#16213e" />
-                  <Text style={styles.playerBadgeText}>Scrum Master</Text>
+                  <Text style={styles.playerBadgeText}>Spymaster</Text>
                 </View>
               )}
               {player.micMuted ? (
@@ -339,7 +341,7 @@ export default function LobbyScreen() {
         <View style={styles.formCard}>
           <Text style={styles.cardTitle}>Prepare Your Team</Text>
           <Text style={styles.cardDescription}>
-            Choose your team and assign the Scrum Master before jumping into the board.
+            Choose your team and role before jumping into the board.
           </Text>
 
           <View style={styles.teamRow}>
@@ -361,12 +363,12 @@ export default function LobbyScreen() {
 
           <View style={styles.roleRow}>
             <Pressable
-              testID="become-scrum-master-button"
+              testID="become-spymaster-button"
               onPress={handleSetScrumMaster}
-              style={[styles.roleButton, roomState.scrumMasterId === currentPlayer?.id && styles.roleButtonActive]}
+              style={[styles.roleButton, currentPlayer?.role === 'spymaster' && styles.roleButtonActive]}
             >
               <Text style={styles.roleText}>
-                {roomState.scrumMasterId ? 'Scrum Master Selected' : 'Become Scrum Master'}
+                {currentPlayer?.role === 'spymaster' ? 'You are Spymaster' : 'Become Spymaster'}
               </Text>
             </Pressable>
             <Pressable
@@ -389,7 +391,7 @@ export default function LobbyScreen() {
             onPress={handleEnterGame}
           >
             <Text style={styles.enterGameText}>
-              {canEnterGame ? 'Enter Game' : 'Pick a team + Scrum Master'}
+              {canEnterGame ? 'Enter Game' : 'Pick a team + Spymaster'}
             </Text>
           </Pressable>
 
@@ -661,7 +663,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     gap: 10,
   },
-  playerRowScrumMaster: {
+  playerRowSpymaster: {
     backgroundColor: 'rgba(255, 211, 105, 0.15)',
     borderRadius: 14,
     padding: 10,

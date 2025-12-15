@@ -27,7 +27,7 @@ export interface GameState {
   hintHistory: Hint[];
 }
 
-export type Role = 'scrumMaster' | 'guesser';
+export type Role = 'spymaster' | 'guesser';
 
 export interface Player {
   id: string;
@@ -40,5 +40,6 @@ export interface Player {
 export interface RoomState extends GameState {
   roomCode: string;
   players: Player[];
-  scrumMasterId: string | null;
+  redSpymasterId: string | null;
+  blueSpymasterId: string | null;
 }

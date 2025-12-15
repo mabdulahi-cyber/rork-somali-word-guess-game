@@ -35,7 +35,7 @@ export const gameRouter = createTRPCRouter({
   setRole: publicProcedure
     .input(
       playerIdentitySchema.extend({
-        role: z.union([z.literal("scrumMaster"), z.literal("guesser")]),
+        role: z.union([z.literal("spymaster"), z.literal("guesser")]),
       })
     )
     .mutation(({ input }) => roomStore.setRole(input)),

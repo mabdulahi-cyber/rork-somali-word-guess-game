@@ -126,7 +126,8 @@ export const roomStore = {
       ...baseGame,
       roomCode,
       players: [],
-      scrumMasterId: null,
+      redSpymasterId: null,
+      blueSpymasterId: null,
     };
 
     const player = createPlayer(playerId, playerName.trim());
@@ -183,14 +184,21 @@ export const roomStore = {
     const room = ensureRoom(roomCode);
     const player = ensurePlayer(room, playerId);
 
-    if (role === "scrumMaster" && room.scrumMasterId && room.scrumMasterId !== playerId) {
-      throw new Error("Scrum Master already selected");
+    if (!player.team) {
+      throw new Error("Select a team before choosing a role");
     }
 
-    if (role === "scrumMaster") {
-      room.scrumMasterId = playerId;
-    } else if (room.scrumMasterId === playerId) {
-      room.scrumMasterId = null;
+    const teamSpymasterKey = player.team === "red" ? "redSpymasterId" : "blueSpymasterId";
+    const currentSpymaster = room[teamSpymasterKey];
+
+    if (role === "spymaster" && currentSpymaster && currentSpymaster !== playerId) {
+      throw new Error(`${player.team === "red" ? "Red" : "Blue"} team already has a Spymaster`);
+    }
+
+    if (role === "spymaster") {
+      room[teamSpymasterKey] = playerId;
+    } else if (currentSpymaster === playerId) {
+      room[teamSpymasterKey] = null;
     }
 
     player.role = role;
@@ -271,8 +279,11 @@ export const roomStore = {
     number: number;
   }) => {
     const room = ensureRoom(roomCode);
-    if (room.scrumMasterId !== playerId) {
-      throw new Error("Only the Scrum Master can send hints");
+    ensurePlayer(room, playerId);
+    const teamSpymasterKey = room.currentTeam === "red" ? "redSpymasterId" : "blueSpymasterId";
+    
+    if (room[teamSpymasterKey] !== playerId) {
+      throw new Error("Only the current team's Spymaster can send hints");
     }
 
     const hint: Hint = {
@@ -287,8 +298,10 @@ export const roomStore = {
   },
   endTurn: ({ roomCode, playerId }: { roomCode: string; playerId: string }) => {
     const room = ensureRoom(roomCode);
-    if (room.scrumMasterId !== playerId) {
-      throw new Error("Only the Scrum Master can end the turn");
+    const teamSpymasterKey = room.currentTeam === "red" ? "redSpymasterId" : "blueSpymasterId";
+    
+    if (room[teamSpymasterKey] !== playerId) {
+      throw new Error("Only the current team's Spymaster can end the turn");
     }
     room.currentTeam = room.currentTeam === "red" ? "blue" : "red";
     room.currentHint = null;
@@ -297,8 +310,11 @@ export const roomStore = {
   },
   resetGame: ({ roomCode, playerId }: { roomCode: string; playerId: string }) => {
     const room = ensureRoom(roomCode);
-    if (room.scrumMasterId !== playerId) {
-      throw new Error("Only the Scrum Master can reset the game");
+    const player = ensurePlayer(room, playerId);
+    const teamSpymasterKey = player.team === "red" ? "redSpymasterId" : "blueSpymasterId";
+    
+    if (room[teamSpymasterKey] !== playerId) {
+      throw new Error("Only a Spymaster can reset the game");
     }
     resetRoomGameState(room);
     rooms.set(room.roomCode, room);

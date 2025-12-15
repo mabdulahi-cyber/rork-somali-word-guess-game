@@ -110,7 +110,8 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       const nextRoom: RoomState = {
         roomCode: code,
         players: [player],
-        scrumMasterId: null,
+        redSpymasterId: null,
+        blueSpymasterId: null,
         cards: deck.cards,
         currentTeam: "red",
         redCardsLeft: deck.redCardsLeft,
@@ -138,27 +139,26 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       console.log("[GameContext] joinRoom (stub)", { trimmedCode, playerId });
 
       setRoomState((prev) => {
-        const baseRoom =
+        const baseRoom: RoomState =
           prev && prev.roomCode.toUpperCase() === trimmedCode
             ? prev
-            : {
-                roomCode: trimmedCode,
-                players: [] as Player[],
-                scrumMasterId: null,
-                ...(() => {
-                  const deck = buildNewDeck();
-                  return {
-                    cards: deck.cards,
-                    currentTeam: "red" as const,
-                    redCardsLeft: deck.redCardsLeft,
-                    blueCardsLeft: deck.blueCardsLeft,
-                    winner: null,
-                    gameStarted: true,
-                    currentHint: null,
-                    hintHistory: [],
-                  };
-                })(),
-              };
+            : (() => {
+                const deck = buildNewDeck();
+                return {
+                  roomCode: trimmedCode,
+                  players: [] as Player[],
+                  redSpymasterId: null,
+                  blueSpymasterId: null,
+                  cards: deck.cards,
+                  currentTeam: "red" as const,
+                  redCardsLeft: deck.redCardsLeft,
+                  blueCardsLeft: deck.blueCardsLeft,
+                  winner: null,
+                  gameStarted: true,
+                  currentHint: null,
+                  hintHistory: [],
+                };
+              })();
 
         const already = baseRoom.players.some((p) => p.id === playerId);
         const nextPlayers = already
@@ -205,15 +205,27 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       setRoomState((prev) => {
         if (!prev) throw new Error("Room not found");
 
-        let scrumMasterId = prev.scrumMasterId;
-        if (role === "scrumMaster") {
-          scrumMasterId = playerId;
-        } else if (scrumMasterId === playerId) {
-          scrumMasterId = null;
+        const currentPlayerData = prev.players.find((p) => p.id === playerId);
+        if (!currentPlayerData?.team) {
+          throw new Error("Select a team before choosing a role");
+        }
+
+        const teamSpymasterKey = currentPlayerData.team === "red" ? "redSpymasterId" : "blueSpymasterId";
+        const currentSpymaster = prev[teamSpymasterKey];
+
+        if (role === "spymaster" && currentSpymaster && currentSpymaster !== playerId) {
+          throw new Error(`${currentPlayerData.team === "red" ? "Red" : "Blue"} team already has a Spymaster`);
         }
 
         const nextPlayers = prev.players.map((p) => (p.id === playerId ? { ...p, role } : p));
-        return { ...prev, players: nextPlayers, scrumMasterId };
+        
+        if (role === "spymaster") {
+          return { ...prev, [teamSpymasterKey]: playerId, players: nextPlayers };
+        } else if (currentSpymaster === playerId) {
+          return { ...prev, [teamSpymasterKey]: null, players: nextPlayers };
+        }
+        
+        return { ...prev, players: nextPlayers };
       });
     },
     [playerId, roomCode]
