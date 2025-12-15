@@ -10,6 +10,7 @@ import {
   Platform,
   ActivityIndicator,
   useWindowDimensions,
+  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -34,14 +35,14 @@ function WordCard({ card, onPress, disabled, cardSize }: WordCardProps) {
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
       toValue: 0.94,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
     }).start();
   };
 
   const handlePressOut = () => {
     Animated.spring(scaleAnim, {
       toValue: 1,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
     }).start();
   };
 
@@ -86,8 +87,12 @@ function WordCard({ card, onPress, disabled, cardSize }: WordCardProps) {
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        disabled={card.revealed || disabled}
-        style={styles.cardPressable}
+        disabled={disabled}
+        style={({ pressed }) => [
+          styles.cardPressable,
+          Platform.OS === 'web' && !disabled ? ({ cursor: 'pointer' } as any) : {},
+          pressed && !disabled && styles.cardPressed,
+        ]}
       >
         <LinearGradient
           colors={colors}
@@ -165,6 +170,8 @@ export default function GameScreen() {
   }, [currentPlayer]);
 
   const handleCardPress = async (cardId: string) => {
+    console.log('[Game] Card pressed:', cardId, { canGuess, role: currentPlayer?.role, team: currentPlayer?.team });
+
     if (!canGuess) {
       return;
     }
@@ -394,14 +401,23 @@ export default function GameScreen() {
       </LinearGradient>
 
       <View style={styles.gameBoard}>
-        <View style={[styles.boardWrapper, isWeb && styles.boardWrapperWeb]}>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[
+            styles.boardWrapper,
+            isWeb && styles.boardWrapperWeb,
+            { flexGrow: 1 }
+          ]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={[styles.gridContainer, { width: boardWidth }]}>
             {roomState.cards.map((card) => (
               <WordCard
                 key={card.id}
                 card={card}
                 onPress={() => handleCardPress(card.id)}
-                disabled={!canGuess}
+                disabled={card.revealed}
                 cardSize={cardSize}
               />
             ))}
@@ -424,7 +440,7 @@ export default function GameScreen() {
               </LinearGradient>
             </Pressable>
           )}
-        </View>
+        </ScrollView>
       </View>
 
       {!roomState.winner && (
@@ -713,10 +729,13 @@ const styles = StyleSheet.create({
     gap: CARD_MARGIN,
   },
   cardContainer: {
-    marginBottom: CARD_MARGIN,
+    // marginBottom removed to rely on gap for consistent spacing
   },
   cardPressable: {
     flex: 1,
+  },
+  cardPressed: {
+    opacity: 0.8,
   },
   card: {
     width: '100%',
