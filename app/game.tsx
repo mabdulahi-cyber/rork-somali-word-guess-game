@@ -11,12 +11,13 @@ import {
   ActivityIndicator,
   useWindowDimensions,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Home, RotateCcw, Mic, MicOff, Send } from 'lucide-react-native';
+import { Home, RotateCcw, Mic, MicOff, Send, Crown, ChevronsDown } from 'lucide-react-native';
 import { useGame } from '@/contexts/game-context';
-import type { Card, Hint, Player } from '@/types/game';
+import type { Card, Hint, Player, Team } from '@/types/game';
 
 const CARD_MARGIN = 6;
 const CARDS_PER_ROW = 5;
@@ -144,6 +145,8 @@ export default function GameScreen() {
     toggleMic,
     resetGame,
     currentPlayer,
+    setRole,
+    selectTeam,
   } = useGame();
 
   const [hintWord, setHintWord] = useState<string>('');
@@ -292,38 +295,147 @@ export default function GameScreen() {
     );
   };
 
+  const handleMakeSpymaster = async () => {
+    if (!currentPlayer || !currentPlayer.team) {
+      if (Platform.OS === 'web') {
+        alert('Please select a team first');
+      } else {
+        Alert.alert('Team Required', 'Please select a team first');
+      }
+      return;
+    }
+
+    try {
+      await setRole('spymaster');
+      const teamName = currentPlayer.team === 'red' ? 'Red' : 'Blue';
+      console.log(`${teamName} Spymaster changed to ${currentPlayer.name}`);
+    } catch (error) {
+      console.warn('Failed to become spymaster', error);
+    }
+  };
+
+  const handleStepDown = async () => {
+    try {
+      await setRole('guesser');
+    } catch (error) {
+      console.warn('Failed to step down', error);
+    }
+  };
+
+  const handleTeamSelect = async (team: Team) => {
+    try {
+      await selectTeam(team);
+    } catch (error) {
+      console.warn('Failed to select team', error);
+    }
+  };
+
   const renderPlayerList = () => {
     if (!roomState) return null;
 
     return (
       <View style={styles.playerListContainer}>
-        {roomState.players.map((player: Player) => (
-          <View
-            key={player.id}
-            style={[styles.playerChip, player.role === 'spymaster' && styles.playerChipActive]}
-          >
+        <View style={styles.playerList}>
+          {roomState.players.map((player: Player) => (
             <View
-              style={[
-                styles.playerChipDot,
-                {
-                  backgroundColor:
-                    player.team === 'red'
-                      ? '#ff6b6b'
-                      : player.team === 'blue'
-                      ? '#4ecdc4'
-                      : 'rgba(255, 255, 255, 0.3)',
-                },
-              ]}
-            />
-            <Text style={styles.playerChipText}>{player.name}</Text>
-            {player.role === 'spymaster' && <Text style={styles.playerRoleTag}>SPY</Text>}
-            {player.micMuted ? (
-              <MicOff size={16} color="#ff6b6b" />
-            ) : (
-              <Mic size={16} color="#4ecdc4" />
+              key={player.id}
+              style={[styles.playerChip, player.role === 'spymaster' && styles.playerChipActive]}
+            >
+              <View
+                style={[
+                  styles.playerChipDot,
+                  {
+                    backgroundColor:
+                      player.team === 'red'
+                        ? '#ff6b6b'
+                        : player.team === 'blue'
+                        ? '#4ecdc4'
+                        : 'rgba(255, 255, 255, 0.3)',
+                  },
+                ]}
+              />
+              <Text style={styles.playerChipText}>{player.name}</Text>
+              {player.role === 'spymaster' && <Text style={styles.playerRoleTag}>SPY</Text>}
+              {player.micMuted ? (
+                <MicOff size={16} color="#ff6b6b" />
+              ) : (
+                <Mic size={16} color="#4ecdc4" />
+              )}
+            </View>
+          ))}
+        </View>
+
+        {currentPlayer && (
+          <View style={styles.roleControlsContainer}>
+            {!currentPlayer.team && (
+              <View style={styles.teamSelectionContainer}>
+                <Text style={styles.roleControlsLabel}>Select your team:</Text>
+                <View style={styles.teamButtons}>
+                  <Pressable
+                    onPress={() => handleTeamSelect('red')}
+                    style={styles.teamButton}
+                    testID="select-red-team"
+                  >
+                    <LinearGradient
+                      colors={['#ff6b6b', '#ee5a52']}
+                      style={styles.teamButtonGradient}
+                    >
+                      <Text style={styles.teamButtonText}>Red Team</Text>
+                    </LinearGradient>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleTeamSelect('blue')}
+                    style={styles.teamButton}
+                    testID="select-blue-team"
+                  >
+                    <LinearGradient
+                      colors={['#4ecdc4', '#44a7a0']}
+                      style={styles.teamButtonGradient}
+                    >
+                      <Text style={styles.teamButtonText}>Blue Team</Text>
+                    </LinearGradient>
+                  </Pressable>
+                </View>
+              </View>
+            )}
+
+            {currentPlayer.team && (
+              <View style={styles.roleButtonsContainer}>
+                {currentPlayer.role === 'spymaster' ? (
+                  <Pressable
+                    onPress={handleStepDown}
+                    style={styles.roleButton}
+                    testID="step-down-button"
+                  >
+                    <LinearGradient
+                      colors={['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.08)']}
+                      style={styles.roleButtonGradient}
+                    >
+                      <ChevronsDown size={18} color="#ffd369" />
+                      <Text style={styles.roleButtonText}>Step Down as Spymaster</Text>
+                    </LinearGradient>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    onPress={handleMakeSpymaster}
+                    style={styles.roleButton}
+                    testID="make-spymaster-button"
+                  >
+                    <LinearGradient
+                      colors={['#ffd369', '#f4c542']}
+                      style={styles.roleButtonGradient}
+                    >
+                      <Crown size={18} color="#16213e" />
+                      <Text style={[styles.roleButtonText, styles.roleButtonTextPrimary]}>
+                        Become Spymaster
+                      </Text>
+                    </LinearGradient>
+                  </Pressable>
+                )}
+              </View>
             )}
           </View>
-        ))}
+        )}
       </View>
     );
   };
@@ -693,10 +805,13 @@ const styles = StyleSheet.create({
     color: '#ddd',
   },
   playerListContainer: {
+    marginTop: 12,
+    gap: 12,
+  },
+  playerList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 12,
   },
   playerChip: {
     flexDirection: 'row',
@@ -967,5 +1082,59 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#16213e',
     letterSpacing: 0.5,
+  },
+  roleControlsContainer: {
+    gap: 8,
+  },
+  roleControlsLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#c0c4d6',
+    marginBottom: 8,
+  },
+  teamSelectionContainer: {
+    gap: 8,
+  },
+  teamButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  teamButton: {
+    flex: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  teamButtonGradient: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  teamButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  roleButtonsContainer: {
+    gap: 8,
+  },
+  roleButton: {
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  roleButtonGradient: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  roleButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffd369',
+  },
+  roleButtonTextPrimary: {
+    color: '#16213e',
   },
 });

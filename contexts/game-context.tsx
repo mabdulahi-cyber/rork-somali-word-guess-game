@@ -213,19 +213,24 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
         const teamSpymasterKey = currentPlayerData.team === "red" ? "redSpymasterId" : "blueSpymasterId";
         const currentSpymaster = prev[teamSpymasterKey];
 
-        if (role === "spymaster" && currentSpymaster && currentSpymaster !== playerId) {
-          throw new Error(`${currentPlayerData.team === "red" ? "Red" : "Blue"} team already has a Spymaster`);
-        }
-
-        const nextPlayers = prev.players.map((p) => (p.id === playerId ? { ...p, role } : p));
-        
         if (role === "spymaster") {
+          const nextPlayers = prev.players.map((p) => {
+            if (p.id === playerId) {
+              return { ...p, role: "spymaster" as const };
+            }
+            if (currentSpymaster && p.id === currentSpymaster) {
+              return { ...p, role: "guesser" as const };
+            }
+            return p;
+          });
           return { ...prev, [teamSpymasterKey]: playerId, players: nextPlayers };
-        } else if (currentSpymaster === playerId) {
-          return { ...prev, [teamSpymasterKey]: null, players: nextPlayers };
+        } else {
+          const nextPlayers = prev.players.map((p) => (p.id === playerId ? { ...p, role } : p));
+          if (currentSpymaster === playerId) {
+            return { ...prev, [teamSpymasterKey]: null, players: nextPlayers };
+          }
+          return { ...prev, players: nextPlayers };
         }
-        
-        return { ...prev, players: nextPlayers };
       });
     },
     [playerId, roomCode]

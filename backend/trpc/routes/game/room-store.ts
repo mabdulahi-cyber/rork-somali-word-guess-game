@@ -191,19 +191,24 @@ export const roomStore = {
     const teamSpymasterKey = player.team === "red" ? "redSpymasterId" : "blueSpymasterId";
     const currentSpymaster = room[teamSpymasterKey];
 
-    if (role === "spymaster" && currentSpymaster && currentSpymaster !== playerId) {
-      throw new Error(`${player.team === "red" ? "Red" : "Blue"} team already has a Spymaster`);
-    }
-
     if (role === "spymaster") {
+      if (currentSpymaster && currentSpymaster !== playerId) {
+        const formerSpymaster = room.players.find((p) => p.id === currentSpymaster);
+        if (formerSpymaster) {
+          formerSpymaster.role = "guesser";
+        }
+      }
       room[teamSpymasterKey] = playerId;
-    } else if (currentSpymaster === playerId) {
-      room[teamSpymasterKey] = null;
+      player.role = "spymaster";
+    } else {
+      if (currentSpymaster === playerId) {
+        room[teamSpymasterKey] = null;
+      }
+      player.role = role;
     }
 
-    player.role = role;
     rooms.set(room.roomCode, room);
-    return room;
+    return { room, replacedSpymaster: role === "spymaster" && currentSpymaster && currentSpymaster !== playerId };
   },
   revealCard: ({
     roomCode,
