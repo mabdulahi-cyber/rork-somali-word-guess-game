@@ -4,13 +4,12 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Dimensions,
-  ScrollView,
   Animated,
   TextInput,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -18,18 +17,18 @@ import { Home, RotateCcw, Mic, MicOff, Send } from 'lucide-react-native';
 import { useGame } from '@/contexts/game-context';
 import type { Card, Hint, Player } from '@/types/game';
 
-const { width } = Dimensions.get('window');
 const CARD_MARGIN = 6;
 const CARDS_PER_ROW = 5;
-const CARD_WIDTH = (width - CARD_MARGIN * (CARDS_PER_ROW + 1) - 32) / CARDS_PER_ROW;
+const MAX_BOARD_WIDTH = 1000;
 
 interface WordCardProps {
   card: Card;
   onPress: () => void;
   disabled: boolean;
+  cardSize: number;
 }
 
-function WordCard({ card, onPress, disabled }: WordCardProps) {
+function WordCard({ card, onPress, disabled, cardSize }: WordCardProps) {
   const [scaleAnim] = useState(new Animated.Value(1));
 
   const handlePressIn = () => {
@@ -79,7 +78,7 @@ function WordCard({ card, onPress, disabled }: WordCardProps) {
     <Animated.View
       style={[
         styles.cardContainer,
-        { transform: [{ scale: scaleAnim }] },
+        { width: cardSize, height: cardSize, transform: [{ scale: scaleAnim }] },
       ]}
     >
       <Pressable
@@ -110,6 +109,7 @@ function WordCard({ card, onPress, disabled }: WordCardProps) {
 
 export default function GameScreen() {
   const router = useRouter();
+  const windowDimensions = useWindowDimensions();
   const {
     roomState,
     roomCode,
@@ -124,6 +124,20 @@ export default function GameScreen() {
   const [hintWord, setHintWord] = useState<string>('');
   const [hintNumber, setHintNumber] = useState<number>(1);
   const [hintError, setHintError] = useState<string>('');
+
+  const isWeb = Platform.OS === 'web';
+
+  const boardWidth = useMemo(() => {
+    const availableWidth = windowDimensions.width - 32;
+    if (isWeb) {
+      return Math.min(availableWidth, MAX_BOARD_WIDTH);
+    }
+    return availableWidth;
+  }, [windowDimensions.width, isWeb]);
+
+  const cardSize = useMemo(() => {
+    return (boardWidth - CARD_MARGIN * (CARDS_PER_ROW + 1)) / CARDS_PER_ROW;
+  }, [boardWidth]);
 
   useEffect(() => {
     if (!roomCode) {
@@ -379,40 +393,39 @@ export default function GameScreen() {
         {renderPlayerList()}
       </LinearGradient>
 
-      <ScrollView 
-        style={styles.gameBoard}
-        contentContainerStyle={styles.gameBoardContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.gridContainer}>
-          {roomState.cards.map((card) => (
-            <WordCard
-              key={card.id}
-              card={card}
-              onPress={() => handleCardPress(card.id)}
-              disabled={!canGuess}
-            />
-          ))}
-        </View>
+      <View style={styles.gameBoard}>
+        <View style={[styles.boardWrapper, isWeb && styles.boardWrapperWeb]}>
+          <View style={[styles.gridContainer, { width: boardWidth }]}>
+            {roomState.cards.map((card) => (
+              <WordCard
+                key={card.id}
+                card={card}
+                onPress={() => handleCardPress(card.id)}
+                disabled={!canGuess}
+                cardSize={cardSize}
+              />
+            ))}
+          </View>
 
-        {!roomState.winner && (
-          <Pressable
-            onPress={handleEndTurn}
-            style={[styles.endTurnButton, !isScrumMaster && styles.disabledButton]}
-            disabled={!isScrumMaster}
-            testID="end-turn-button"
-          >
-            <LinearGradient
-              colors={['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.08)']}
-              style={styles.endTurnGradient}
+          {!roomState.winner && (
+            <Pressable
+              onPress={handleEndTurn}
+              style={[styles.endTurnButton, !isScrumMaster && styles.disabledButton, { width: boardWidth }]}
+              disabled={!isScrumMaster}
+              testID="end-turn-button"
             >
-              <Text style={styles.endTurnText}>
-                {isScrumMaster ? 'End Turn' : 'Only Scrum Master can end turn'}
-              </Text>
-            </LinearGradient>
-          </Pressable>
-        )}
-      </ScrollView>
+              <LinearGradient
+                colors={['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.08)']}
+                style={styles.endTurnGradient}
+              >
+                <Text style={styles.endTurnText}>
+                  {isScrumMaster ? 'End Turn' : 'Only Scrum Master can end turn'}
+                </Text>
+              </LinearGradient>
+            </Pressable>
+          )}
+        </View>
+      </View>
 
       {!roomState.winner && (
         <View style={styles.scrumMasterPanel}>
@@ -681,13 +694,17 @@ const styles = StyleSheet.create({
   },
   gameBoard: {
     flex: 1,
+    backgroundColor: '#0f3460',
   },
-  gameBoardContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 16,
-    flexGrow: 1,
+  boardWrapper: {
+    flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  boardWrapperWeb: {
+    paddingVertical: 24,
   },
   gridContainer: {
     flexDirection: 'row',
@@ -696,8 +713,6 @@ const styles = StyleSheet.create({
     gap: CARD_MARGIN,
   },
   cardContainer: {
-    width: CARD_WIDTH,
-    height: CARD_WIDTH,
     marginBottom: CARD_MARGIN,
   },
   cardPressable: {
@@ -720,9 +735,10 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   cardText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     textAlign: 'center',
+    lineHeight: 16,
   },
   assassinEmoji: {
     fontSize: 20,
@@ -731,9 +747,10 @@ const styles = StyleSheet.create({
     right: 4,
   },
   endTurnButton: {
-    marginTop: 24,
+    marginTop: 20,
     borderRadius: 16,
     overflow: 'hidden',
+    alignSelf: 'center',
   },
   endTurnGradient: {
     paddingVertical: 16,
@@ -762,7 +779,8 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 32,
     alignItems: 'center',
-    width: width - 64,
+    maxWidth: 500,
+    width: '90%',
     elevation: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
