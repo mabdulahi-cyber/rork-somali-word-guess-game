@@ -8,17 +8,16 @@ const app = new Hono();
 
 app.use("*", cors());
 
+app.get("/", (c) => {
+  return c.json({ status: "ok", message: "API is running" });
+});
+
 app.use(
-  "/trpc/*",
+  "*",
   trpcServer({
-    endpoint: "/trpc",
     router: appRouter,
     createContext,
   })
 );
-
-app.get("/", (c) => {
-  return c.json({ status: "ok", message: "API is running" });
-});
 
 export default app;
