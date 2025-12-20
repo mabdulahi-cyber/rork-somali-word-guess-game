@@ -5,7 +5,6 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AppErrorBoundary } from "@/components/ErrorBoundary";
 import { GameProvider } from "@/contexts/game-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { trpc, trpcClient } from "@/lib/trpc";
 
 if (!(React as any).use) {
   (React as any).use = function <T>(promise: Promise<T> | T): T {
@@ -60,13 +59,11 @@ export default function RootLayout() {
   return (
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <trpc.Provider client={trpcClient} queryClient={queryClient}>
-          <GameProvider>
-            <GestureHandlerRootView style={{ flex: 1 }}>
-              <RootLayoutNav />
-            </GestureHandlerRootView>
-          </GameProvider>
-        </trpc.Provider>
+        <GameProvider>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <RootLayoutNav />
+          </GestureHandlerRootView>
+        </GameProvider>
       </QueryClientProvider>
     </AppErrorBoundary>
   );
