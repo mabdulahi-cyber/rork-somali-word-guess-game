@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import createContextHook from "@nkzw/create-context-hook";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { supabase } from "@/lib/supabase";
+import { db } from "@/lib/database";
 import type { Player, Role, RoomState, Team, Card, CardType } from "@/types/game";
 import { SOMALI_WORDS } from "@/constants/somali-words";
 
@@ -125,46 +125,25 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
 
   const fetchSnapshot = useCallback(async (code: string) => {
     if (!code) return;
-    // Don't set loading true here to avoid flickering on realtime updates
-    // or just handle it gracefully in UI
     
     try {
-      // Fetch room
-      const { data: roomData, error: roomError } = await supabase
-        .from('rooms')
-        .select('*')
-        .eq('code', code)
-        .single();
-
-      if (roomError || !roomData) {
-        if (roomError?.code === 'PGRST116') {
-          console.log("[GameContext] Room not found");
-          setRoomState(null);
-          return;
-        }
-        console.error("[GameContext] fetchSnapshot room error", roomError);
+      const roomData = await db.getRoom(code);
+      
+      if (!roomData) {
+        console.log("[GameContext] Room not found");
+        setRoomState(null);
         return;
       }
 
-      // Fetch players
-      const { data: playersData, error: playersError } = await supabase
-        .from('players')
-        .select('*')
-        .eq('room_code', code);
+      const playersData = await db.getPlayersByRoom(code);
 
-      if (playersError) {
-        console.error("[GameContext] fetchSnapshot players error", playersError);
-        return;
-      }
-
-      // Construct RoomState
       const cards = roomData.words.map((word: string, index: number) => ({
         id: `card-${index}`,
         word,
         type: roomData.key_map[index],
         revealed: roomData.revealed[index],
         revealedByTeam: null, // We might need to store this if needed, for now null is fine or we can guess
-      })) as Card[];
+      }));
 
       const redCardsLeft = cards.filter(c => c.type === 'red' && !c.revealed).length;
       const blueCardsLeft = cards.filter(c => c.type === 'blue' && !c.revealed).length;
@@ -183,7 +162,7 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
         winner: roomData.game_status === 'ENDED' ? 
           (roomData.winner_team as Team | 'assassinated') : null, // Assuming winner_team column or derived
         gameStarted: true,
-        currentHint: roomData.hint_word ? {
+        currentHint: (roomData.hint_word && typeof roomData.hint_number === 'number') ? {
           word: roomData.hint_word,
           number: roomData.hint_number,
           team: roomData.turn_team as Team,
@@ -191,9 +170,9 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
         hintHistory: [], // Not implementing history for now unless we add a table for it
         turn: {
           turnTeam: roomData.turn_team as Team,
-          status: roomData.turn_status,
-          hintWord: roomData.hint_word,
-          hintNumber: roomData.hint_number,
+          status: roomData.turn_status as 'WAITING_HINT' | 'GUESSING',
+          hintWord: roomData.hint_word ?? null,
+          hintNumber: roomData.hint_number ?? null,
           guessesLeft: roomData.guesses_left,
         },
         version: roomData.version,
@@ -215,34 +194,16 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
     }
   }, []);
 
-  // Realtime subscription
   useEffect(() => {
     if (!roomCode) return;
 
-    console.log("[GameContext] Subscribing to room:", roomCode);
-    const channel = supabase.channel(`room:${roomCode}`)
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'rooms', 
-        filter: `code=eq.${roomCode}` 
-      }, () => {
-        console.log("[GameContext] Room update detected");
-        fetchSnapshot(roomCode);
-      })
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'players', 
-        filter: `room_code=eq.${roomCode}` 
-      }, () => {
-        console.log("[GameContext] Players update detected");
-        fetchSnapshot(roomCode);
-      })
-      .subscribe();
+    console.log("[GameContext] Setting up polling for room:", roomCode);
+    const interval = setInterval(() => {
+      fetchSnapshot(roomCode);
+    }, 2000);
 
     return () => {
-      supabase.removeChannel(channel);
+      clearInterval(interval);
     };
   }, [roomCode, fetchSnapshot]);
 
@@ -266,72 +227,27 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
 
     const words = cards.map(c => c.word);
     const keyMap = cards.map(c => c.type);
-    const revealed = Array(25).fill(false);
 
     try {
       console.log('[GameContext] createRoom - generating code:', code);
       
-      // Insert room
-      const { error: roomError } = await supabase
-        .from('rooms')
-        .insert({
-          code,
-          words,
-          key_map: keyMap,
-          revealed,
-          turn_team: startingTeam,
-          turn_status: 'WAITING_HINT',
-          game_status: 'PLAYING',
-          version: 1
-        });
-
-      if (roomError) {
-        console.error('[GameContext] createRoom - Room insert failed');
-        console.error('[GameContext] Error message:', roomError.message);
-        console.error('[GameContext] Error code:', roomError.code);
-        console.error('[GameContext] Error details:', roomError.details);
-        console.error('[GameContext] Error hint:', roomError.hint);
-        throw new Error(`Failed to create room: ${roomError.message} (${roomError.code})`);
-      }
-      
+      await db.createRoom(code, words, keyMap, startingTeam);
       console.log('[GameContext] createRoom - Room created successfully:', code);
 
-      // Insert player (host)
-      console.log('[GameContext] createRoom - Inserting player:', playerId);
-      const { error: playerInsertError } = await supabase
-        .from('players')
-        .insert({
-          id: playerId,
+      console.log('[GameContext] createRoom - Creating player:', playerId);
+      
+      const existingPlayer = await db.getPlayer(playerId);
+      if (existingPlayer) {
+        await db.updatePlayer(playerId, {
           room_code: code,
           name: trimmedName,
           team: 'red',
           role: 'guesser',
-          is_active: true
+          is_active: true,
         });
-        
-      if (playerInsertError) {
-        console.log('[GameContext] createRoom - Player insert failed, trying upsert');
-        console.error('[GameContext] Player insert error:', playerInsertError.message);
-        
-        // If player insert fails (maybe duplicate ID from previous session), try update
-        const { error: updateError } = await supabase
-            .from('players')
-            .upsert({
-                id: playerId,
-                room_code: code,
-                name: trimmedName,
-                team: 'red',
-                role: 'guesser',
-                is_active: true
-            });
-            
-        if (updateError) {
-          console.error('[GameContext] createRoom - Player upsert failed');
-          console.error('[GameContext] Error message:', updateError.message);
-          console.error('[GameContext] Error code:', updateError.code);
-          console.error('[GameContext] Error details:', updateError.details);
-          throw new Error(`Failed to add player: ${updateError.message} (${updateError.code})`);
-        }
+      } else {
+        await db.createPlayer(playerId, code, trimmedName);
+        await db.updatePlayer(playerId, { team: 'red' });
       }
       
       console.log('[GameContext] createRoom - Player added successfully');
@@ -381,48 +297,23 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
     if (!playerId) throw new Error("Player ID not ready");
 
     try {
-      // Check if room exists
-      const { data: room, error: roomError } = await supabase
-        .from('rooms')
-        .select('code')
-        .eq('code', trimmedCode)
-        .single();
+      const room = await db.getRoom(trimmedCode);
 
-      if (roomError || !room) {
+      if (!room) {
         throw new Error("Room not found");
       }
 
-      // Join as player
-      await supabase
-        .from('players')
-        .upsert({
-          id: playerId,
+      const existing = await db.getPlayer(playerId);
+        
+      if (existing) {
+        await db.updatePlayer(playerId, {
           room_code: trimmedCode,
           name: trimmedName,
-          // If existing player, keep fields, otherwise defaults?
-          // For upsert, we might overwrite. Let's assume we want to join/rejoin.
-          // If we want to preserve team/role on rejoin, we should select first.
-          // But for simplicity, let's just upsert with default team if not present?
-          // Actually, let's just update room_code and name, keeping others if exists.
+          is_active: true,
         });
-        
-        // Better: Select first to see if exists
-        const { data: existing } = await supabase.from('players').select('*').eq('id', playerId).single();
-        
-        const updateData: any = {
-            id: playerId,
-            room_code: trimmedCode,
-            name: trimmedName,
-            is_active: true
-        };
-        
-        if (!existing) {
-            updateData.team = null; // Let them pick
-            updateData.role = 'guesser';
-        }
-
-        const { error: upsertError } = await supabase.from('players').upsert(updateData);
-        if (upsertError) throw upsertError;
+      } else {
+        await db.createPlayer(playerId, trimmedCode, trimmedName);
+      }
 
       setPlayerName(trimmedName);
       setRoomCode(trimmedCode);
@@ -436,19 +327,13 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
   const selectTeam = useCallback(async (team: Team) => {
     if (!roomCode || !playerId) return;
     
-    // If switching teams, force role to guesser
-    await supabase
-      .from('players')
-      .update({ team, role: 'guesser' })
-      .eq('id', playerId);
+    await db.updatePlayer(playerId, { team, role: 'guesser' });
   }, [roomCode, playerId]);
 
   const setRole = useCallback(async (role: Role) => {
     if (!roomCode || !playerId) return;
 
-    // Validate: if becoming spymaster, check if taken
     if (role === 'spymaster' && roomState) {
-        // We need to check current state from DB ideally, but optimistic check:
         const player = roomState.players.find(p => p.id === playerId);
         const currentSpymasterId = player?.team === 'red' ? roomState.redSpymasterId : roomState.blueSpymasterId;
         if (currentSpymasterId && currentSpymasterId !== playerId) {
@@ -456,22 +341,15 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
         }
     }
 
-    await supabase
-      .from('players')
-      .update({ role })
-      .eq('id', playerId);
+    await db.updatePlayer(playerId, { role });
   }, [roomCode, playerId, roomState]);
 
   const revealCard = useCallback(async (cardId: string) => {
     if (!roomCode || !playerId || !roomState) return;
 
     const index = parseInt(cardId.split('-')[1]);
-    // Actually we should fetch fresh state inside DB transaction or stored procedure?
-    // Supabase JS doesn't do transactions easily without RPC.
-    // We will do Read-Modify-Write with optimistic locking (version) or just simple update for now.
     
-    // Simplest: Get fresh room, update array, write back.
-    const { data: room } = await supabase.from('rooms').select('*').eq('code', roomCode).single();
+    const room = await db.getRoom(roomCode);
     if (!room) return;
 
     if (room.revealed[index]) return; // Already revealed
@@ -541,32 +419,26 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
         // In DB we can keep hint_word but maybe clear it for next turn
     }
 
-    await supabase
-        .from('rooms')
-        .update({
-            revealed: newRevealed,
-            turn_team: turnTeam,
-            turn_status: turnStatus,
-            guesses_left: guessesLeft,
-            game_status: gameStatus,
-            winner_team: winner
-        })
-        .eq('code', roomCode);
+    await db.updateRoom(roomCode, {
+        revealed: newRevealed,
+        turn_team: turnTeam,
+        turn_status: turnStatus,
+        guesses_left: guessesLeft,
+        game_status: gameStatus,
+        winner_team: winner
+    });
 
   }, [roomCode, playerId, roomState]);
 
   const sendHint = useCallback(async (word: string, number: number) => {
     if (!roomCode) return;
 
-    await supabase
-        .from('rooms')
-        .update({
-            hint_word: word,
-            hint_number: number,
-            turn_status: 'GUESSING',
-            guesses_left: number + 1
-        })
-        .eq('code', roomCode);
+    await db.updateRoom(roomCode, {
+        hint_word: word,
+        hint_number: number,
+        turn_status: 'GUESSING',
+        guesses_left: number + 1
+    });
   }, [roomCode]);
 
   const endTurn = useCallback(async () => {
@@ -574,16 +446,13 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
 
     const nextTeam = roomState.currentTeam === 'red' ? 'blue' : 'red';
     
-    await supabase
-        .from('rooms')
-        .update({
-            turn_team: nextTeam,
-            turn_status: 'WAITING_HINT',
-            guesses_left: 0,
-            hint_word: null,
-            hint_number: null
-        })
-        .eq('code', roomCode);
+    await db.updateRoom(roomCode, {
+        turn_team: nextTeam,
+        turn_status: 'WAITING_HINT',
+        guesses_left: 0,
+        hint_word: undefined,
+        hint_number: undefined
+    });
   }, [roomCode, roomState]);
 
   const resetGame = useCallback(async () => {
@@ -592,24 +461,20 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
     const { cards, startingTeam } = generateBoard();
     const words = cards.map(c => c.word);
     const keyMap = cards.map(c => c.type);
-    const revealed = Array(25).fill(false);
 
-    await supabase
-        .from('rooms')
-        .update({
-            words,
-            key_map: keyMap,
-            revealed,
-            turn_team: startingTeam,
-            turn_status: 'WAITING_HINT',
-            game_status: 'PLAYING',
-            winner_team: null,
-            hint_word: null,
-            hint_number: null,
-            guesses_left: 0,
-            version: (roomState?.version || 0) + 1
-        })
-        .eq('code', roomCode);
+    await db.updateRoom(roomCode, {
+        words,
+        key_map: keyMap,
+        revealed: Array(25).fill(false),
+        turn_team: startingTeam,
+        turn_status: 'WAITING_HINT',
+        game_status: 'PLAYING',
+        winner_team: undefined,
+        hint_word: undefined,
+        hint_number: undefined,
+        guesses_left: 0,
+        version: (roomState?.version || 0) + 1
+    });
   }, [roomCode, roomState]);
 
   const toggleMic = useCallback(async () => {
@@ -621,8 +486,7 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
 
   const leaveRoom = useCallback(async () => {
     if (roomCode && playerId) {
-        // Optional: mark inactive
-        await supabase.from('players').update({ is_active: false }).eq('id', playerId);
+        await db.updatePlayer(playerId, { is_active: false });
     }
     setRoomCode(null);
     setRoomState(null);
