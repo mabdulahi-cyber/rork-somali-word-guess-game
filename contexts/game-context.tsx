@@ -342,21 +342,35 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       console.log('[GameContext] createRoom - SUCCESS! Room code:', code);
     } catch (error: any) {
       console.error('[GameContext] createRoom - FAILED');
-      console.error('[GameContext] Error object:', error);
       
-      // If it's already a formatted error, throw it
-      if (error instanceof Error) {
-        throw error;
+      // Extract Supabase error details
+      const errorMessage = error?.message || 'Unknown error';
+      const errorCode = error?.code || 'UNKNOWN';
+      const errorDetails = error?.details || '';
+      const errorHint = error?.hint || '';
+      
+      // Structured logging
+      console.error('[GameContext] CreateRoom Supabase Error', {
+        message: errorMessage,
+        code: errorCode,
+        details: errorDetails,
+        hint: errorHint,
+        fullError: error
+      });
+      
+      // Build detailed error message
+      let finalMessage = errorMessage;
+      if (errorCode && errorCode !== 'UNKNOWN') {
+        finalMessage += ` (Code: ${errorCode})`;
+      }
+      if (errorDetails) {
+        finalMessage += ` - ${errorDetails}`;
+      }
+      if (errorHint) {
+        finalMessage += ` Hint: ${errorHint}`;
       }
       
-      // If it's a Supabase error object
-      if (error && typeof error === 'object') {
-        const message = error.message || 'Unknown Supabase error';
-        const code = error.code || 'UNKNOWN';
-        throw new Error(`${message} (${code})`);
-      }
-      
-      throw new Error('Failed to create room');
+      throw new Error(finalMessage);
     }
   }, [playerId]);
 
