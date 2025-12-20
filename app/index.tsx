@@ -42,10 +42,14 @@ export default function LobbyScreen() {
     try {
       setIsSubmitting(true);
       setErrorMessage('');
+      console.log('[LobbyScreen] Creating room for player:', playerName);
       await createRoom(playerName);
+      console.log('[LobbyScreen] Room created successfully');
       setFlowState('lobby');
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to create room');
+    } catch (error: any) {
+      console.error('[LobbyScreen] Create room failed:', error);
+      const errorMsg = error?.message || (typeof error === 'string' ? error : 'Unable to create room. Check console for details.');
+      setErrorMessage(errorMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -55,10 +59,14 @@ export default function LobbyScreen() {
     try {
       setIsSubmitting(true);
       setErrorMessage('');
+      console.log('[LobbyScreen] Joining room:', joinCode);
       await joinRoom(playerName, joinCode);
+      console.log('[LobbyScreen] Room joined successfully');
       setFlowState('lobby');
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to join room');
+    } catch (error: any) {
+      console.error('[LobbyScreen] Join room failed:', error);
+      const errorMsg = error?.message || (typeof error === 'string' ? error : 'Unable to join room. Check console for details.');
+      setErrorMessage(errorMsg);
     } finally {
       setIsSubmitting(false);
     }

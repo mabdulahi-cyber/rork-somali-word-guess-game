@@ -269,6 +269,8 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
     const revealed = Array(25).fill(false);
 
     try {
+      console.log('[GameContext] createRoom - generating code:', code);
+      
       // Insert room
       const { error: roomError } = await supabase
         .from('rooms')
@@ -283,21 +285,34 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
           version: 1
         });
 
-      if (roomError) throw roomError;
+      if (roomError) {
+        console.error('[GameContext] createRoom - Room insert failed');
+        console.error('[GameContext] Error message:', roomError.message);
+        console.error('[GameContext] Error code:', roomError.code);
+        console.error('[GameContext] Error details:', roomError.details);
+        console.error('[GameContext] Error hint:', roomError.hint);
+        throw new Error(`Failed to create room: ${roomError.message} (${roomError.code})`);
+      }
+      
+      console.log('[GameContext] createRoom - Room created successfully:', code);
 
       // Insert player (host)
+      console.log('[GameContext] createRoom - Inserting player:', playerId);
       const { error: playerInsertError } = await supabase
         .from('players')
         .insert({
           id: playerId,
           room_code: code,
           name: trimmedName,
-          team: 'red', // Default to red or maybe null?
+          team: 'red',
           role: 'guesser',
           is_active: true
         });
         
       if (playerInsertError) {
+        console.log('[GameContext] createRoom - Player insert failed, trying upsert');
+        console.error('[GameContext] Player insert error:', playerInsertError.message);
+        
         // If player insert fails (maybe duplicate ID from previous session), try update
         const { error: updateError } = await supabase
             .from('players')
@@ -310,16 +325,38 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
                 is_active: true
             });
             
-        if (updateError) throw updateError;
+        if (updateError) {
+          console.error('[GameContext] createRoom - Player upsert failed');
+          console.error('[GameContext] Error message:', updateError.message);
+          console.error('[GameContext] Error code:', updateError.code);
+          console.error('[GameContext] Error details:', updateError.details);
+          throw new Error(`Failed to add player: ${updateError.message} (${updateError.code})`);
+        }
       }
+      
+      console.log('[GameContext] createRoom - Player added successfully');
 
       setPlayerName(trimmedName);
       setRoomCode(code);
       await AsyncStorage.setItem(ROOM_CODE_STORAGE_KEY, code);
-      console.log("[GameContext] Room created:", code);
-    } catch (error) {
-      console.error("[GameContext] createRoom error", error);
-      throw error;
+      console.log('[GameContext] createRoom - SUCCESS! Room code:', code);
+    } catch (error: any) {
+      console.error('[GameContext] createRoom - FAILED');
+      console.error('[GameContext] Error object:', error);
+      
+      // If it's already a formatted error, throw it
+      if (error instanceof Error) {
+        throw error;
+      }
+      
+      // If it's a Supabase error object
+      if (error && typeof error === 'object') {
+        const message = error.message || 'Unknown Supabase error';
+        const code = error.code || 'UNKNOWN';
+        throw new Error(`${message} (${code})`);
+      }
+      
+      throw new Error('Failed to create room');
     }
   }, [playerId]);
 
