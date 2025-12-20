@@ -12,6 +12,7 @@ import {
   useWindowDimensions,
   ScrollView,
   Alert,
+  SafeAreaView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -21,7 +22,7 @@ import type { Card, Hint, Player, Team } from '@/types/game';
 
 const CARD_MARGIN = 6;
 const CARDS_PER_ROW = 5;
-const MAX_BOARD_WIDTH = 1000;
+const MAX_BOARD_WIDTH = 900;
 
 interface WordCardProps {
   card: Card;
@@ -450,11 +451,12 @@ export default function GameScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.header}>
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.header}>
         <View style={styles.headerTop}>
           <Pressable onPress={handleGoHome} style={styles.iconButton} testID="go-home-button">
             <Home size={22} color="#ffffff" />
@@ -653,12 +655,17 @@ export default function GameScreen() {
         </View>
       )}
 
-      {renderWinnerModal()}
-    </KeyboardAvoidingView>
+        {renderWinnerModal()}
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#1a1a2e',
+  },
   container: {
     flex: 1,
     backgroundColor: '#0f3460',
@@ -674,7 +681,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   header: {
-    paddingTop: 48,
+    paddingTop: 12,
     paddingBottom: 12,
     paddingHorizontal: 16,
   },
@@ -850,20 +857,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#0f3460',
   },
   boardWrapper: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 16,
     paddingVertical: 16,
+    minHeight: '100%',
   },
   boardWrapperWeb: {
     paddingVertical: 24,
+    justifyContent: 'center',
   },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'center',
     gap: CARD_MARGIN,
+    alignSelf: 'center',
   },
   cardContainer: {
     // marginBottom removed to rely on gap for consistent spacing
@@ -891,10 +898,10 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   cardText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
-    lineHeight: 16,
+    lineHeight: 15,
   },
   assassinEmoji: {
     fontSize: 20,
