@@ -16,9 +16,10 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Home, RotateCcw, Mic, MicOff, Send, Crown, ChevronsDown } from 'lucide-react-native';
+import { Home, RotateCcw, Mic, MicOff, Send } from 'lucide-react-native';
 import { useGame } from '@/contexts/game-context';
-import type { Card, Hint, Player, Team } from '@/types/game';
+import { PlayersPanel } from '@/components/PlayersPanel';
+import type { Card, Hint, Team, Role } from '@/types/game';
 
 const CARD_MARGIN = 6;
 const CARDS_PER_ROW = 5;
@@ -307,149 +308,25 @@ export default function GameScreen() {
     );
   };
 
-  const handleMakeSpymaster = async () => {
-    if (!currentPlayer || !currentPlayer.team) {
+  const handleChangeRole = async (role: Role) => {
+    try {
+      await setRole(role);
+    } catch (error) {
+      console.warn('Failed to change role', error);
       if (Platform.OS === 'web') {
-        alert('Please select a team first');
+        alert(error instanceof Error ? error.message : 'Failed to change role');
       } else {
-        Alert.alert('Team Required', 'Please select a team first');
+        Alert.alert('Error', error instanceof Error ? error.message : 'Failed to change role');
       }
-      return;
-    }
-
-    try {
-      await setRole('spymaster');
-      const teamName = currentPlayer.team === 'red' ? 'Red' : 'Blue';
-      console.log(`${teamName} Spymaster changed to ${currentPlayer.name}`);
-    } catch (error) {
-      console.warn('Failed to become spymaster', error);
     }
   };
 
-  const handleStepDown = async () => {
-    try {
-      await setRole('guesser');
-    } catch (error) {
-      console.warn('Failed to step down', error);
-    }
-  };
-
-  const handleTeamSelect = async (team: Team) => {
+  const handleSwitchTeam = async (team: Team) => {
     try {
       await selectTeam(team);
     } catch (error) {
       console.warn('Failed to select team', error);
     }
-  };
-
-  const renderPlayerList = () => {
-    if (!roomState) return null;
-
-    return (
-      <View style={styles.playerListContainer}>
-        <View style={styles.playerList}>
-          {roomState.players.map((player: Player) => (
-            <View
-              key={player.id}
-              style={[styles.playerChip, player.role === 'spymaster' && styles.playerChipActive]}
-            >
-              <View
-                style={[
-                  styles.playerChipDot,
-                  {
-                    backgroundColor:
-                      player.team === 'red'
-                        ? '#ff6b6b'
-                        : player.team === 'blue'
-                        ? '#4ecdc4'
-                        : 'rgba(255, 255, 255, 0.3)',
-                  },
-                ]}
-              />
-              <Text style={styles.playerChipText}>{player.name}</Text>
-              {player.role === 'spymaster' && <Text style={styles.playerRoleTag}>SPY</Text>}
-              {player.micMuted ? (
-                <MicOff size={16} color="#ff6b6b" />
-              ) : (
-                <Mic size={16} color="#4ecdc4" />
-              )}
-            </View>
-          ))}
-        </View>
-
-        {currentPlayer && (
-          <View style={styles.roleControlsContainer}>
-            {!currentPlayer.team && (
-              <View style={styles.teamSelectionContainer}>
-                <Text style={styles.roleControlsLabel}>Select your team:</Text>
-                <View style={styles.teamButtons}>
-                  <Pressable
-                    onPress={() => handleTeamSelect('red')}
-                    style={styles.teamButton}
-                    testID="select-red-team"
-                  >
-                    <LinearGradient
-                      colors={['#ff6b6b', '#ee5a52']}
-                      style={styles.teamButtonGradient}
-                    >
-                      <Text style={styles.teamButtonText}>Red Team</Text>
-                    </LinearGradient>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => handleTeamSelect('blue')}
-                    style={styles.teamButton}
-                    testID="select-blue-team"
-                  >
-                    <LinearGradient
-                      colors={['#4ecdc4', '#44a7a0']}
-                      style={styles.teamButtonGradient}
-                    >
-                      <Text style={styles.teamButtonText}>Blue Team</Text>
-                    </LinearGradient>
-                  </Pressable>
-                </View>
-              </View>
-            )}
-
-            {currentPlayer.team && (
-              <View style={styles.roleButtonsContainer}>
-                {currentPlayer.role === 'spymaster' ? (
-                  <Pressable
-                    onPress={handleStepDown}
-                    style={styles.roleButton}
-                    testID="step-down-button"
-                  >
-                    <LinearGradient
-                      colors={['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.08)']}
-                      style={styles.roleButtonGradient}
-                    >
-                      <ChevronsDown size={18} color="#ffd369" />
-                      <Text style={styles.roleButtonText}>Step Down as Spymaster</Text>
-                    </LinearGradient>
-                  </Pressable>
-                ) : (
-                  <Pressable
-                    onPress={handleMakeSpymaster}
-                    style={styles.roleButton}
-                    testID="make-spymaster-button"
-                  >
-                    <LinearGradient
-                      colors={['#ffd369', '#f4c542']}
-                      style={styles.roleButtonGradient}
-                    >
-                      <Crown size={18} color="#16213e" />
-                      <Text style={[styles.roleButtonText, styles.roleButtonTextPrimary]}>
-                        Become Spymaster
-                      </Text>
-                    </LinearGradient>
-                  </Pressable>
-                )}
-              </View>
-            )}
-          </View>
-        )}
-      </View>
-    );
   };
 
   if (!roomState) {
@@ -551,7 +428,14 @@ export default function GameScreen() {
           </View>
         ) : null}
 
-        {renderPlayerList()}
+        {roomState && (
+          <PlayersPanel
+            players={roomState.players}
+            currentPlayerId={currentPlayer?.id || ''}
+            onSwitchTeam={handleSwitchTeam}
+            onChangeRole={handleChangeRole}
+          />
+        )}
       </LinearGradient>
 
       <View style={styles.gameBoard}>

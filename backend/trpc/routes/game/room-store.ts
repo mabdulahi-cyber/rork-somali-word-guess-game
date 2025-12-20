@@ -63,6 +63,7 @@ const createNewGameState = (): GameState => {
       guessesLeft: 0,
     },
     version: 0,
+    lastEvent: null,
   };
 };
 
@@ -255,6 +256,7 @@ export const roomStore = {
     card.revealed = true;
     card.revealedByTeam = room.turn.turnTeam;
     room.version += 1;
+    room.lastEvent = "reveal";
 
     if (card.type === "assassin") {
       room.winner = "assassinated";
@@ -341,6 +343,7 @@ export const roomStore = {
     room.turn.hintNumber = number;
     room.turn.guessesLeft = number + 1;
     room.version += 1;
+    room.lastEvent = "hint";
     rooms.set(room.roomCode, room);
     return room;
   },
@@ -364,6 +367,7 @@ export const roomStore = {
     room.turn.guessesLeft = 0;
     room.currentHint = null;
     room.version += 1;
+    room.lastEvent = "endTurn";
     rooms.set(room.roomCode, room);
     return room;
   },

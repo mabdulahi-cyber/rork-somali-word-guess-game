@@ -37,6 +37,7 @@ export interface GameState {
   hintHistory: Hint[];
   turn: TurnState;
   version: number;
+  lastEvent: string | null;
 }
 
 export type Role = 'spymaster' | 'guesser';
