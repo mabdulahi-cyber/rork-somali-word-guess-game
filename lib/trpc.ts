@@ -38,11 +38,34 @@ const getBaseUrl = () => {
   return FALLBACK_REMOTE_BASE_URL;
 };
 
+const baseUrl = getBaseUrl();
+const trpcUrl = `${baseUrl}/api/trpc`;
+
+console.log('[tRPC] Initializing client with URL:', trpcUrl);
+
 export const trpcClient = trpc.createClient({
   links: [
     httpLink({
-      url: `${getBaseUrl()}/api/trpc`,
+      url: trpcUrl,
       transformer: superjson,
+      fetch(url, options) {
+        return fetch(url, {
+          ...options,
+          headers: {
+            ...options?.headers,
+            'Content-Type': 'application/json',
+          },
+        }).then(async (response) => {
+          if (!response.ok) {
+            console.error('[tRPC] HTTP error:', response.status, response.statusText);
+            const text = await response.text();
+            if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+              throw new Error('Server returned HTML instead of JSON. Check API endpoint configuration.');
+            }
+          }
+          return response;
+        });
+      },
     }),
   ],
 });

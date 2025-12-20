@@ -29,12 +29,15 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [playerName, setPlayerName] = useState<string>("");
 
+  console.log('[GameContext] Initializing with playerId:', playerId);
+
   const roomQuery = trpc.game.getRoomState.useQuery(
     { roomCode: roomCode ?? "" },
     {
       enabled: !!roomCode,
       refetchInterval: 2000,
       refetchIntervalInBackground: true,
+      retry: 2,
     }
   );
 
@@ -60,14 +63,19 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       const trimmedName = name.trim();
       if (!trimmedName) throw new Error("Name is required");
 
-      const result = await createRoomMutation.mutateAsync({
-        playerId,
-        playerName: trimmedName,
-      });
+      try {
+        const result = await createRoomMutation.mutateAsync({
+          playerId,
+          playerName: trimmedName,
+        });
 
-      console.log("[GameContext] createRoom", { roomCode: result.room.roomCode, playerId });
-      setRoomCode(result.room.roomCode);
-      setPlayerName(trimmedName);
+        console.log("[GameContext] createRoom success", { roomCode: result.room.roomCode, playerId });
+        setRoomCode(result.room.roomCode);
+        setPlayerName(trimmedName);
+      } catch (error) {
+        console.error('[GameContext] createRoom error:', error);
+        throw new Error(error instanceof Error ? error.message : 'Failed to create room. Please check your connection.');
+      }
     },
     [playerId, createRoomMutation]
   );
