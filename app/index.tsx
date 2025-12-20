@@ -114,7 +114,9 @@ export default function LobbyScreen() {
 
   const handleEnterGame = () => {
     if (!canEnterGame) return;
-    router.push('/game');
+    if (roomCode) {
+        router.push({ pathname: '/room/[code]', params: { code: roomCode } });
+    }
   };
 
   const renderPlayerList = () => {

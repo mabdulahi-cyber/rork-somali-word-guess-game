@@ -175,11 +175,10 @@ export default function GameScreen() {
   useEffect(() => {
     if (isInitializing) return;
     
-    if (!roomCode) {
-      console.log('[Game] No roomCode, redirecting to home');
-      router.replace('/');
-    }
-  }, [roomCode, router, isInitializing]);
+    // If no room code, we can't play.
+    // But we don't redirect here anymore to allow parent component to set it.
+    // If roomCode is still null after a delay/check, then maybe show empty state.
+  }, [roomCode, isInitializing]);
 
   useEffect(() => {
     if (isRoomLoading || isInitializing) {

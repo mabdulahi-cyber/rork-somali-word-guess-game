@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import createContextHook from "@nkzw/create-context-hook";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createTRPCProxyClient, httpBatchLink } from "@trpc/client";
-import superjson from "superjson";
-import type { AppRouter } from "@/backend/trpc/app-router";
-import type { Player, Role, RoomState, Team } from "@/types/game";
+import { supabase } from "@/lib/supabase";
+import type { Player, Role, RoomState, Team, Card, CardType } from "@/types/game";
+import { SOMALI_WORDS } from "@/constants/somali-words";
 
 interface GameContextValue {
   playerId: string;
@@ -25,6 +24,7 @@ interface GameContextValue {
   toggleMic: () => Promise<void>;
   leaveRoom: () => void;
   refetchRoom: () => Promise<void>;
+  setRoomCode: (code: string) => void;
 }
 
 const CLIENT_ID_STORAGE_KEY = "somali-codenames.clientId" as const;
@@ -33,16 +33,6 @@ const ROOM_CODE_STORAGE_KEY = "somali-codenames.roomCode" as const;
 const generateClientId = (): string => {
   const s4 = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
   return `${s4()}${s4()}-${s4()}-${s4()}-${s4()}-${s4()}${s4()}${s4()}`;
-};
-
-const getApiUrl = (): string => {
-  const envUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
-  if (envUrl) {
-    console.log("[GameContext] Using env API URL:", envUrl);
-    return envUrl;
-  }
-  console.log("[GameContext] Using localhost API URL");
-  return "http://localhost:3000";
 };
 
 const tryLoadClientId = async (): Promise<string> => {
@@ -58,6 +48,48 @@ const tryLoadClientId = async (): Promise<string> => {
   }
 };
 
+const generateRoomCode = () => {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let result = "";
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+
+const generateBoard = () => {
+  // Select 25 random words
+  const shuffledWords = [...SOMALI_WORDS].sort(() => 0.5 - Math.random());
+  const selectedWords = shuffledWords.slice(0, 25);
+
+  // Determine starting team (9 cards vs 8 cards)
+  const startingTeam: Team = Math.random() < 0.5 ? 'red' : 'blue';
+  const secondTeam: Team = startingTeam === 'red' ? 'blue' : 'red';
+
+  // Create key map
+  // 9 starting team, 8 second team, 7 neutral, 1 assassin
+  const types: CardType[] = [
+    ...Array(9).fill(startingTeam),
+    ...Array(8).fill(secondTeam),
+    ...Array(7).fill('neutral'),
+    ...Array(1).fill('assassin'),
+  ];
+
+  // Shuffle types
+  const shuffledTypes = types.sort(() => 0.5 - Math.random());
+
+  // Create cards
+  const cards: Card[] = selectedWords.map((word, index) => ({
+    id: `card-${index}`,
+    word,
+    type: shuffledTypes[index],
+    revealed: false,
+    revealedByTeam: null,
+  }));
+
+  return { cards, startingTeam };
+};
+
 export const [GameProvider, useGame] = createContextHook<GameContextValue>(() => {
   const [playerId, setPlayerId] = useState<string>("");
   const [playerName, setPlayerName] = useState<string>("");
@@ -66,46 +98,7 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
   const [isRoomLoading, setIsRoomLoading] = useState<boolean>(false);
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
 
-  const trpcClient = useMemo(() => {
-    const apiUrl = getApiUrl();
-    const trpcUrl = `${apiUrl}/trpc`;
-    console.log("[GameContext] Full tRPC URL:", trpcUrl);
-    return createTRPCProxyClient<AppRouter>({
-      links: [
-        httpBatchLink({
-          url: trpcUrl,
-          transformer: superjson,
-          fetch: async (url, options) => {
-            console.log("[tRPC] Fetching:", url);
-            try {
-              const response = await fetch(url, options);
-              console.log("[tRPC] Response status:", response.status);
-              console.log("[tRPC] Response headers:", Object.fromEntries(response.headers.entries()));
-              
-              const contentType = response.headers.get("content-type");
-              if (response.status === 404) {
-                const text = await response.text();
-                console.error("[tRPC] 404 Response body:", text.substring(0, 200));
-                throw new Error(`API endpoint not found (404). Check that the Netlify function is deployed. URL: ${url}`);
-              }
-              
-              if (!contentType?.includes("application/json")) {
-                const text = await response.text();
-                console.error("[tRPC] Non-JSON response:", text.substring(0, 200));
-                throw new Error(`Expected JSON response but got ${contentType}. Response: ${text.substring(0, 100)}`);
-              }
-              
-              return response;
-            } catch (error) {
-              console.error("[tRPC] Fetch error:", error);
-              throw error;
-            }
-          },
-        }),
-      ],
-    });
-  }, []);
-
+  // Initialize player ID
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -127,271 +120,478 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       }
     };
     void run();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
-  const fetchSnapshot = useCallback(
-    async (code: string) => {
-      if (!code) return;
-      console.log("[GameContext] fetchSnapshot", code);
-      setIsRoomLoading(true);
-      try {
-        const room = await trpcClient.game.getRoomState.query({ roomCode: code });
-        setRoomState(room);
-      } catch (error) {
-        console.error("[GameContext] fetchSnapshot error", error);
-        setRoomState(null);
-      } finally {
-        setIsRoomLoading(false);
+  const fetchSnapshot = useCallback(async (code: string) => {
+    if (!code) return;
+    // Don't set loading true here to avoid flickering on realtime updates
+    // or just handle it gracefully in UI
+    
+    try {
+      // Fetch room
+      const { data: roomData, error: roomError } = await supabase
+        .from('rooms')
+        .select('*')
+        .eq('code', code)
+        .single();
+
+      if (roomError || !roomData) {
+        if (roomError?.code === 'PGRST116') {
+          console.log("[GameContext] Room not found");
+          setRoomState(null);
+          return;
+        }
+        console.error("[GameContext] fetchSnapshot room error", roomError);
+        return;
       }
-    },
-    [trpcClient]
-  );
 
-  useEffect(() => {
-    if (!roomCode) {
-      setRoomState(null);
-      return;
+      // Fetch players
+      const { data: playersData, error: playersError } = await supabase
+        .from('players')
+        .select('*')
+        .eq('room_code', code);
+
+      if (playersError) {
+        console.error("[GameContext] fetchSnapshot players error", playersError);
+        return;
+      }
+
+      // Construct RoomState
+      const cards = roomData.words.map((word: string, index: number) => ({
+        id: `card-${index}`,
+        word,
+        type: roomData.key_map[index],
+        revealed: roomData.revealed[index],
+        revealedByTeam: null, // We might need to store this if needed, for now null is fine or we can guess
+      })) as Card[];
+
+      const redCardsLeft = cards.filter(c => c.type === 'red' && !c.revealed).length;
+      const blueCardsLeft = cards.filter(c => c.type === 'blue' && !c.revealed).length;
+
+      const spymasters = {
+        red: playersData.find((p: any) => p.team === 'red' && p.role === 'spymaster')?.id || null,
+        blue: playersData.find((p: any) => p.team === 'blue' && p.role === 'spymaster')?.id || null,
+      };
+
+      const newState: RoomState = {
+        roomCode: roomData.code,
+        cards,
+        currentTeam: roomData.turn_team as Team,
+        redCardsLeft,
+        blueCardsLeft,
+        winner: roomData.game_status === 'ENDED' ? 
+          (roomData.winner_team as Team | 'assassinated') : null, // Assuming winner_team column or derived
+        gameStarted: true,
+        currentHint: roomData.hint_word ? {
+          word: roomData.hint_word,
+          number: roomData.hint_number,
+          team: roomData.turn_team as Team,
+        } : null,
+        hintHistory: [], // Not implementing history for now unless we add a table for it
+        turn: {
+          turnTeam: roomData.turn_team as Team,
+          status: roomData.turn_status,
+          hintWord: roomData.hint_word,
+          hintNumber: roomData.hint_number,
+          guessesLeft: roomData.guesses_left,
+        },
+        version: roomData.version,
+        lastEvent: null,
+        players: playersData.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          team: p.team,
+          role: p.role,
+          micMuted: true, // Not synced yet
+        })),
+        redSpymasterId: spymasters.red,
+        blueSpymasterId: spymasters.blue,
+      };
+
+      setRoomState(newState);
+    } catch (error) {
+      console.error("[GameContext] fetchSnapshot exception", error);
     }
+  }, []);
 
-    void fetchSnapshot(roomCode);
+  // Realtime subscription
+  useEffect(() => {
+    if (!roomCode) return;
 
-    const interval = setInterval(() => {
-      void fetchSnapshot(roomCode);
-    }, 2000);
+    console.log("[GameContext] Subscribing to room:", roomCode);
+    const channel = supabase.channel(`room:${roomCode}`)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'rooms', 
+        filter: `code=eq.${roomCode}` 
+      }, () => {
+        console.log("[GameContext] Room update detected");
+        fetchSnapshot(roomCode);
+      })
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'players', 
+        filter: `room_code=eq.${roomCode}` 
+      }, () => {
+        console.log("[GameContext] Players update detected");
+        fetchSnapshot(roomCode);
+      })
+      .subscribe();
 
     return () => {
-      clearInterval(interval);
+      supabase.removeChannel(channel);
     };
-  }, [fetchSnapshot, roomCode]);
+  }, [roomCode, fetchSnapshot]);
+
+  // Initial fetch when roomCode changes
+  useEffect(() => {
+    if (roomCode) {
+      setIsRoomLoading(true);
+      fetchSnapshot(roomCode).finally(() => setIsRoomLoading(false));
+    } else {
+      setRoomState(null);
+    }
+  }, [roomCode, fetchSnapshot]);
+
+  const createRoom = useCallback(async (name: string) => {
+    const trimmedName = name.trim();
+    if (!trimmedName) throw new Error("Name is required");
+    if (!playerId) throw new Error("Player ID not ready");
+
+    const code = generateRoomCode();
+    const { cards, startingTeam } = generateBoard();
+
+    const words = cards.map(c => c.word);
+    const keyMap = cards.map(c => c.type);
+    const revealed = Array(25).fill(false);
+
+    try {
+      // Insert room
+      const { error: roomError } = await supabase
+        .from('rooms')
+        .insert({
+          code,
+          words,
+          key_map: keyMap,
+          revealed,
+          turn_team: startingTeam,
+          turn_status: 'WAITING_HINT',
+          game_status: 'PLAYING',
+          version: 1
+        });
+
+      if (roomError) throw roomError;
+
+      // Insert player (host)
+      const { error: playerInsertError } = await supabase
+        .from('players')
+        .insert({
+          id: playerId,
+          room_code: code,
+          name: trimmedName,
+          team: 'red', // Default to red or maybe null?
+          role: 'guesser',
+          is_active: true
+        });
+        
+      if (playerInsertError) {
+        // If player insert fails (maybe duplicate ID from previous session), try update
+        const { error: updateError } = await supabase
+            .from('players')
+            .upsert({
+                id: playerId,
+                room_code: code,
+                name: trimmedName,
+                team: 'red',
+                role: 'guesser',
+                is_active: true
+            });
+            
+        if (updateError) throw updateError;
+      }
+
+      setPlayerName(trimmedName);
+      setRoomCode(code);
+      await AsyncStorage.setItem(ROOM_CODE_STORAGE_KEY, code);
+      console.log("[GameContext] Room created:", code);
+    } catch (error) {
+      console.error("[GameContext] createRoom error", error);
+      throw error;
+    }
+  }, [playerId]);
+
+  const joinRoom = useCallback(async (name: string, code: string) => {
+    const trimmedName = name.trim();
+    const trimmedCode = code.trim().toUpperCase();
+    if (!trimmedName || !trimmedCode) throw new Error("Name and room code are required");
+    if (!playerId) throw new Error("Player ID not ready");
+
+    try {
+      // Check if room exists
+      const { data: room, error: roomError } = await supabase
+        .from('rooms')
+        .select('code')
+        .eq('code', trimmedCode)
+        .single();
+
+      if (roomError || !room) {
+        throw new Error("Room not found");
+      }
+
+      // Join as player
+      await supabase
+        .from('players')
+        .upsert({
+          id: playerId,
+          room_code: trimmedCode,
+          name: trimmedName,
+          // If existing player, keep fields, otherwise defaults?
+          // For upsert, we might overwrite. Let's assume we want to join/rejoin.
+          // If we want to preserve team/role on rejoin, we should select first.
+          // But for simplicity, let's just upsert with default team if not present?
+          // Actually, let's just update room_code and name, keeping others if exists.
+        });
+        
+        // Better: Select first to see if exists
+        const { data: existing } = await supabase.from('players').select('*').eq('id', playerId).single();
+        
+        const updateData: any = {
+            id: playerId,
+            room_code: trimmedCode,
+            name: trimmedName,
+            is_active: true
+        };
+        
+        if (!existing) {
+            updateData.team = null; // Let them pick
+            updateData.role = 'guesser';
+        }
+
+        const { error: upsertError } = await supabase.from('players').upsert(updateData);
+        if (upsertError) throw upsertError;
+
+      setPlayerName(trimmedName);
+      setRoomCode(trimmedCode);
+      await AsyncStorage.setItem(ROOM_CODE_STORAGE_KEY, trimmedCode);
+    } catch (error) {
+      console.error("[GameContext] joinRoom error", error);
+      throw error;
+    }
+  }, [playerId]);
+
+  const selectTeam = useCallback(async (team: Team) => {
+    if (!roomCode || !playerId) return;
+    
+    // If switching teams, force role to guesser
+    await supabase
+      .from('players')
+      .update({ team, role: 'guesser' })
+      .eq('id', playerId);
+  }, [roomCode, playerId]);
+
+  const setRole = useCallback(async (role: Role) => {
+    if (!roomCode || !playerId) return;
+
+    // Validate: if becoming spymaster, check if taken
+    if (role === 'spymaster' && roomState) {
+        // We need to check current state from DB ideally, but optimistic check:
+        const player = roomState.players.find(p => p.id === playerId);
+        const currentSpymasterId = player?.team === 'red' ? roomState.redSpymasterId : roomState.blueSpymasterId;
+        if (currentSpymasterId && currentSpymasterId !== playerId) {
+            throw new Error("Already has a spymaster");
+        }
+    }
+
+    await supabase
+      .from('players')
+      .update({ role })
+      .eq('id', playerId);
+  }, [roomCode, playerId, roomState]);
+
+  const revealCard = useCallback(async (cardId: string) => {
+    if (!roomCode || !playerId || !roomState) return;
+
+    const index = parseInt(cardId.split('-')[1]);
+    // Actually we should fetch fresh state inside DB transaction or stored procedure?
+    // Supabase JS doesn't do transactions easily without RPC.
+    // We will do Read-Modify-Write with optimistic locking (version) or just simple update for now.
+    
+    // Simplest: Get fresh room, update array, write back.
+    const { data: room } = await supabase.from('rooms').select('*').eq('code', roomCode).single();
+    if (!room) return;
+
+    if (room.revealed[index]) return; // Already revealed
+
+    const newRevealed = [...room.revealed];
+    newRevealed[index] = true;
+    
+    const cardType = room.key_map[index] as CardType;
+    let turnTeam = room.turn_team;
+    let turnStatus = room.turn_status;
+    let guessesLeft = room.guesses_left;
+    let gameStatus = room.game_status;
+    let winner = room.winner_team;
+
+    // Logic for turn end
+    let endTurn = false;
+    
+    if (cardType === 'assassin') {
+        gameStatus = 'ENDED';
+        winner = turnTeam === 'red' ? 'blue' : 'red'; // Note: Winner is the OTHER team?
+        // Wait, assassin kills you, so other team wins.
+        // If I am red and I pick assassin, Blue wins.
+        // We can store 'assassinated' in winner or just store the winning team.
+        // roomState expects winner: Team | 'assassinated'
+        // Let's store 'assassinated' logic in client or backend?
+        // Let's store the actual winning team in DB.
+    } else if (cardType === 'neutral') {
+        endTurn = true;
+    } else if (cardType !== turnTeam) {
+        endTurn = true;
+    } else {
+        // Correct guess
+        guessesLeft -= 1;
+        if (guessesLeft === 0) {
+            endTurn = true;
+        }
+    }
+
+    // Check win condition (all cards of a team revealed)
+    // We need to count revealed cards of each color
+    const totalRed = room.key_map.filter((t: string) => t === 'red').length;
+    const totalBlue = room.key_map.filter((t: string) => t === 'blue').length;
+    
+    let revealedRed = 0;
+    let revealedBlue = 0;
+    
+    room.key_map.forEach((t: string, i: number) => {
+        if (t === 'red' && newRevealed[i]) revealedRed++;
+        if (t === 'blue' && newRevealed[i]) revealedBlue++;
+    });
+    
+    if (gameStatus !== 'ENDED') {
+        if (revealedRed === totalRed) {
+            gameStatus = 'ENDED';
+            winner = 'red';
+        } else if (revealedBlue === totalBlue) {
+            gameStatus = 'ENDED';
+            winner = 'blue';
+        }
+    }
+
+    if (endTurn && gameStatus !== 'ENDED') {
+        turnTeam = turnTeam === 'red' ? 'blue' : 'red';
+        turnStatus = 'WAITING_HINT';
+        guessesLeft = 0;
+        // Reset hint
+        // In DB we can keep hint_word but maybe clear it for next turn
+    }
+
+    await supabase
+        .from('rooms')
+        .update({
+            revealed: newRevealed,
+            turn_team: turnTeam,
+            turn_status: turnStatus,
+            guesses_left: guessesLeft,
+            game_status: gameStatus,
+            winner_team: winner
+        })
+        .eq('code', roomCode);
+
+  }, [roomCode, playerId, roomState]);
+
+  const sendHint = useCallback(async (word: string, number: number) => {
+    if (!roomCode) return;
+
+    await supabase
+        .from('rooms')
+        .update({
+            hint_word: word,
+            hint_number: number,
+            turn_status: 'GUESSING',
+            guesses_left: number + 1
+        })
+        .eq('code', roomCode);
+  }, [roomCode]);
+
+  const endTurn = useCallback(async () => {
+    if (!roomCode || !roomState) return;
+
+    const nextTeam = roomState.currentTeam === 'red' ? 'blue' : 'red';
+    
+    await supabase
+        .from('rooms')
+        .update({
+            turn_team: nextTeam,
+            turn_status: 'WAITING_HINT',
+            guesses_left: 0,
+            hint_word: null,
+            hint_number: null
+        })
+        .eq('code', roomCode);
+  }, [roomCode, roomState]);
+
+  const resetGame = useCallback(async () => {
+    if (!roomCode) return;
+    
+    const { cards, startingTeam } = generateBoard();
+    const words = cards.map(c => c.word);
+    const keyMap = cards.map(c => c.type);
+    const revealed = Array(25).fill(false);
+
+    await supabase
+        .from('rooms')
+        .update({
+            words,
+            key_map: keyMap,
+            revealed,
+            turn_team: startingTeam,
+            turn_status: 'WAITING_HINT',
+            game_status: 'PLAYING',
+            winner_team: null,
+            hint_word: null,
+            hint_number: null,
+            guesses_left: 0,
+            version: (roomState?.version || 0) + 1
+        })
+        .eq('code', roomCode);
+  }, [roomCode, roomState]);
+
+  const toggleMic = useCallback(async () => {
+    // Not implemented for now, just local state?
+    // Or we can update 'players' table 'mic_muted' column if we added it?
+    // For now, let's ignore or just log.
+    console.log("Toggle mic not fully implemented without media server");
+  }, []);
+
+  const leaveRoom = useCallback(async () => {
+    if (roomCode && playerId) {
+        // Optional: mark inactive
+        await supabase.from('players').update({ is_active: false }).eq('id', playerId);
+    }
+    setRoomCode(null);
+    setRoomState(null);
+    setPlayerName("");
+    void AsyncStorage.removeItem(ROOM_CODE_STORAGE_KEY);
+  }, [roomCode, playerId]);
+
+  const refetchRoom = useCallback(async () => {
+    if (roomCode) await fetchSnapshot(roomCode);
+  }, [roomCode, fetchSnapshot]);
 
   const currentPlayer = useMemo(() => {
     if (!roomState || !playerId) return null;
     return roomState.players.find((p) => p.id === playerId) ?? null;
   }, [playerId, roomState]);
 
-  const createRoom = useCallback(
-    async (name: string) => {
-      const trimmedName = name.trim();
-      if (!trimmedName) throw new Error("Name is required");
-      if (!playerId) throw new Error("Player ID not ready");
-
-      console.log("[GameContext] createRoom", { playerId, name: trimmedName });
-
-      try {
-        const result = await trpcClient.game.createRoom.mutate({
-          playerId,
-          playerName: trimmedName,
-        });
-
-        setPlayerName(trimmedName);
-        setRoomCode(result.room.roomCode);
-        await AsyncStorage.setItem(ROOM_CODE_STORAGE_KEY, result.room.roomCode);
-        console.log("[GameContext] Room created:", result.room.roomCode);
-      } catch (error) {
-        console.error("[GameContext] createRoom error", error);
-        throw error;
-      }
-    },
-    [playerId, trpcClient]
-  );
-
-  const joinRoom = useCallback(
-    async (name: string, code: string) => {
-      const trimmedName = name.trim();
-      const trimmedCode = code.trim().toUpperCase();
-      if (!trimmedName || !trimmedCode) throw new Error("Name and room code are required");
-      if (!playerId) throw new Error("Player ID not ready");
-
-      console.log("[GameContext] joinRoom", { trimmedCode, playerId });
-
-      try {
-        await trpcClient.game.joinRoom.mutate({
-          roomCode: trimmedCode,
-          playerId,
-          playerName: trimmedName,
-        });
-
-        setPlayerName(trimmedName);
-        setRoomCode(trimmedCode);
-        await AsyncStorage.setItem(ROOM_CODE_STORAGE_KEY, trimmedCode);
-        console.log("[GameContext] Joined room:", trimmedCode);
-      } catch (error) {
-        console.error("[GameContext] joinRoom error", error);
-        throw error;
-      }
-    },
-    [playerId, trpcClient]
-  );
-
-  const selectTeam = useCallback(
-    async (team: Team) => {
-      if (!roomCode) throw new Error("Join a room first");
-      if (!playerId) throw new Error("Player not ready");
-
-      console.log("[GameContext] selectTeam", { roomCode, playerId, team });
-
-      try {
-        await trpcClient.game.selectTeam.mutate({
-          roomCode,
-          playerId,
-          team,
-        });
-        await fetchSnapshot(roomCode);
-      } catch (error) {
-        console.error("[GameContext] selectTeam error", error);
-        throw error;
-      }
-    },
-    [playerId, roomCode, trpcClient, fetchSnapshot]
-  );
-
-  const setRole = useCallback(
-    async (role: Role) => {
-      if (!roomCode) throw new Error("Join a room first");
-      if (!playerId) throw new Error("Player not ready");
-
-      console.log("[GameContext] setRole", { roomCode, playerId, role });
-
-      try {
-        await trpcClient.game.setRole.mutate({
-          roomCode,
-          playerId,
-          role,
-        });
-        await fetchSnapshot(roomCode);
-      } catch (error) {
-        console.error("[GameContext] setRole error", error);
-        throw error;
-      }
-    },
-    [playerId, roomCode, trpcClient, fetchSnapshot]
-  );
-
-  const sendHint = useCallback(
-    async (word: string, number: number) => {
-      if (!roomCode) throw new Error("Join a room first");
-      if (!playerId) throw new Error("Player not ready");
-
-      const trimmed = word.trim();
-      if (!trimmed) throw new Error("Hint word is required");
-
-      console.log("[GameContext] sendHint", { roomCode, playerId, word: trimmed, number });
-
-      try {
-        await trpcClient.game.sendHint.mutate({
-          roomCode,
-          playerId,
-          word: trimmed,
-          number,
-        });
-        await fetchSnapshot(roomCode);
-      } catch (error) {
-        console.error("[GameContext] sendHint error", error);
-        throw error;
-      }
-    },
-    [playerId, roomCode, trpcClient, fetchSnapshot]
-  );
-
-  const endTurn = useCallback(async () => {
-    if (!roomCode) throw new Error("Join a room first");
-    if (!playerId) throw new Error("Player not ready");
-
-    console.log("[GameContext] endTurn", { roomCode, playerId });
-
-    try {
-      await trpcClient.game.endTurn.mutate({
-        roomCode,
-        playerId,
-      });
-      await fetchSnapshot(roomCode);
-    } catch (error) {
-      console.error("[GameContext] endTurn error", error);
-      throw error;
-    }
-  }, [roomCode, playerId, trpcClient, fetchSnapshot]);
-
-  const revealCard = useCallback(
-    async (cardId: string) => {
-      if (!roomCode) throw new Error("Join a room first");
-      if (!playerId) throw new Error("Player not ready");
-
-      console.log("[GameContext] revealCard", { roomCode, playerId, cardId });
-
-      setRoomState((prev) => {
-        if (!prev) return prev;
-        const nextCards = prev.cards.map((c) => (c.id === cardId ? { ...c, revealed: true } : c));
-        return { ...prev, cards: nextCards };
-      });
-
-      try {
-        await trpcClient.game.revealCard.mutate({
-          roomCode,
-          playerId,
-          cardId,
-        });
-        await fetchSnapshot(roomCode);
-      } catch (error) {
-        console.error("[GameContext] revealCard error", error);
-        await fetchSnapshot(roomCode);
-      }
-    },
-    [playerId, roomCode, trpcClient, fetchSnapshot]
-  );
-
-  const resetGame = useCallback(async () => {
-    if (!roomCode) throw new Error("Join a room first");
-    if (!playerId) throw new Error("Player not ready");
-
-    console.log("[GameContext] resetGame", { roomCode, playerId });
-
-    try {
-      await trpcClient.game.resetGame.mutate({
-        roomCode,
-        playerId,
-      });
-      await fetchSnapshot(roomCode);
-    } catch (error) {
-      console.error("[GameContext] resetGame error", error);
-      throw error;
-    }
-  }, [roomCode, playerId, trpcClient, fetchSnapshot]);
-
-  const toggleMic = useCallback(async () => {
-    if (!roomCode) throw new Error("Join a room first");
-    if (!playerId) throw new Error("Player not ready");
-
-    console.log("[GameContext] toggleMic", { roomCode, playerId });
-
-    try {
-      await trpcClient.game.toggleMic.mutate({
-        roomCode,
-        playerId,
-      });
-      await fetchSnapshot(roomCode);
-    } catch (error) {
-      console.error("[GameContext] toggleMic error", error);
-    }
-  }, [roomCode, playerId, trpcClient, fetchSnapshot]);
-
-  const leaveRoom = useCallback(() => {
-    console.log("[GameContext] leaveRoom", { roomCode });
-
-    setRoomCode(null);
-    setRoomState(null);
-    setPlayerName("");
-    void AsyncStorage.removeItem(ROOM_CODE_STORAGE_KEY);
-  }, [roomCode]);
-
-  const refetchRoom = useCallback(async () => {
-    if (roomCode) {
-      await fetchSnapshot(roomCode);
-    }
-  }, [roomCode, fetchSnapshot]);
+  const setRoomCodeAndPersist = useCallback(async (code: string) => {
+    setRoomCode(code);
+    await AsyncStorage.setItem(ROOM_CODE_STORAGE_KEY, code);
+  }, []);
 
   return {
     playerId,
@@ -412,5 +612,6 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
     toggleMic,
     leaveRoom,
     refetchRoom,
+    setRoomCode: setRoomCodeAndPersist,
   };
 });

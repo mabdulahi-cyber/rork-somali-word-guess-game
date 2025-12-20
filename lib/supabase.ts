@@ -12,12 +12,14 @@ export const getSupabase = (): SupabaseClient => {
   const supabaseUrl =
     resolveEnv("EXPO_PUBLIC_SUPABASE_URL") ??
     resolveEnv("VITE_SUPABASE_URL") ??
-    resolveEnv("NEXT_PUBLIC_SUPABASE_URL");
+    resolveEnv("NEXT_PUBLIC_SUPABASE_URL") ??
+    resolveEnv("EXPO_PUBLIC_RORK_DB_ENDPOINT");
 
   const supabaseAnonKey =
     resolveEnv("EXPO_PUBLIC_SUPABASE_ANON_KEY") ??
     resolveEnv("VITE_SUPABASE_ANON_KEY") ??
-    resolveEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    resolveEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY") ??
+    resolveEnv("EXPO_PUBLIC_RORK_DB_TOKEN");
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error(
