@@ -13,10 +13,11 @@ app.get("/", (c) => {
 });
 
 app.use(
-  "*",
+  "/trpc/*",
   trpcServer({
     router: appRouter,
     createContext,
+    endpoint: "/trpc",
   })
 );
 
