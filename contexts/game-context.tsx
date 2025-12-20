@@ -37,7 +37,11 @@ const generateClientId = (): string => {
 
 const getApiUrl = (): string => {
   const envUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
-  if (envUrl) return envUrl;
+  if (envUrl) {
+    console.log("[GameContext] Using env API URL:", envUrl);
+    return envUrl;
+  }
+  console.log("[GameContext] Using localhost API URL");
   return "http://localhost:3000";
 };
 
@@ -64,12 +68,39 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
 
   const trpcClient = useMemo(() => {
     const apiUrl = getApiUrl();
-    console.log("[GameContext] tRPC client URL:", apiUrl);
+    const trpcUrl = `${apiUrl}/trpc`;
+    console.log("[GameContext] Full tRPC URL:", trpcUrl);
     return createTRPCProxyClient<AppRouter>({
       links: [
         httpBatchLink({
-          url: `${apiUrl}/trpc`,
+          url: trpcUrl,
           transformer: superjson,
+          fetch: async (url, options) => {
+            console.log("[tRPC] Fetching:", url);
+            try {
+              const response = await fetch(url, options);
+              console.log("[tRPC] Response status:", response.status);
+              console.log("[tRPC] Response headers:", Object.fromEntries(response.headers.entries()));
+              
+              const contentType = response.headers.get("content-type");
+              if (response.status === 404) {
+                const text = await response.text();
+                console.error("[tRPC] 404 Response body:", text.substring(0, 200));
+                throw new Error(`API endpoint not found (404). Check that the Netlify function is deployed. URL: ${url}`);
+              }
+              
+              if (!contentType?.includes("application/json")) {
+                const text = await response.text();
+                console.error("[tRPC] Non-JSON response:", text.substring(0, 200));
+                throw new Error(`Expected JSON response but got ${contentType}. Response: ${text.substring(0, 100)}`);
+              }
+              
+              return response;
+            } catch (error) {
+              console.error("[tRPC] Fetch error:", error);
+              throw error;
+            }
+          },
         }),
       ],
     });
