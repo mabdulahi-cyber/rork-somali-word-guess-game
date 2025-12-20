@@ -1,7 +1,6 @@
 import React, { useEffect } from "react";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AppErrorBoundary } from "@/components/ErrorBoundary";
 import { GameProvider } from "@/contexts/game-context";
 
@@ -49,9 +48,7 @@ export default function RootLayout() {
   return (
     <AppErrorBoundary>
       <GameProvider>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <RootLayoutNav />
-        </GestureHandlerRootView>
+        <RootLayoutNav />
       </GameProvider>
     </AppErrorBoundary>
   );
