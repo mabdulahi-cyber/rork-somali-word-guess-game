@@ -55,6 +55,14 @@ const createNewGameState = (): GameState => {
     gameStarted: true,
     currentHint: null,
     hintHistory: [],
+    turn: {
+      turnTeam: "red",
+      status: "WAITING_HINT",
+      hintWord: null,
+      hintNumber: null,
+      guessesLeft: 0,
+    },
+    version: 0,
   };
 };
 
@@ -106,6 +114,8 @@ const resetRoomGameState = (room: RoomState) => {
   room.currentHint = nextGame.currentHint;
   room.hintHistory = nextGame.hintHistory;
   room.gameStarted = nextGame.gameStarted;
+  room.turn = nextGame.turn;
+  room.version = (room.version || 0) + 1;
 };
 
 export const roomStore = {
@@ -225,8 +235,11 @@ export const roomStore = {
     if (player.role !== "guesser") {
       throw new Error("Only guessers can reveal cards");
     }
-    if (player.team !== room.currentTeam) {
+    if (player.team !== room.turn.turnTeam) {
       throw new Error("It is not your team's turn");
+    }
+    if (room.turn.status !== "GUESSING") {
+      throw new Error("Wait for your spymaster to give a hint");
     }
 
     const cardIndex = room.cards.findIndex((card) => card.id === cardId);
@@ -240,33 +253,54 @@ export const roomStore = {
     }
 
     card.revealed = true;
-    card.revealedByTeam = room.currentTeam;
+    card.revealedByTeam = room.turn.turnTeam;
+    room.version += 1;
 
     if (card.type === "assassin") {
       room.winner = "assassinated";
-    } else if (card.type === "red") {
+      room.turn.status = "WAITING_HINT";
+      room.turn.guessesLeft = 0;
+      rooms.set(room.roomCode, room);
+      return room;
+    }
+
+    if (card.type === "red") {
       room.redCardsLeft -= 1;
       if (room.redCardsLeft === 0) {
         room.winner = "red";
+        rooms.set(room.roomCode, room);
+        return room;
       }
     } else if (card.type === "blue") {
       room.blueCardsLeft -= 1;
       if (room.blueCardsLeft === 0) {
         room.winner = "blue";
+        rooms.set(room.roomCode, room);
+        return room;
       }
     }
 
-    if (room.winner) {
-      rooms.set(room.roomCode, room);
-      return room;
-    }
+    const isCorrectTeam = card.type === room.turn.turnTeam;
 
-    if (card.type === "neutral") {
+    if (!isCorrectTeam) {
       room.currentTeam = room.currentTeam === "red" ? "blue" : "red";
-    } else if (card.type === "red" && room.currentTeam === "blue") {
-      room.currentTeam = "red";
-    } else if (card.type === "blue" && room.currentTeam === "red") {
-      room.currentTeam = "blue";
+      room.turn.turnTeam = room.currentTeam;
+      room.turn.status = "WAITING_HINT";
+      room.turn.hintWord = null;
+      room.turn.hintNumber = null;
+      room.turn.guessesLeft = 0;
+      room.currentHint = null;
+    } else {
+      room.turn.guessesLeft -= 1;
+      if (room.turn.guessesLeft <= 0) {
+        room.currentTeam = room.currentTeam === "red" ? "blue" : "red";
+        room.turn.turnTeam = room.currentTeam;
+        room.turn.status = "WAITING_HINT";
+        room.turn.hintWord = null;
+        room.turn.hintNumber = null;
+        room.turn.guessesLeft = 0;
+        room.currentHint = null;
+      }
     }
 
     rooms.set(room.roomCode, room);
@@ -285,31 +319,51 @@ export const roomStore = {
   }) => {
     const room = ensureRoom(roomCode);
     ensurePlayer(room, playerId);
-    const teamSpymasterKey = room.currentTeam === "red" ? "redSpymasterId" : "blueSpymasterId";
+    const teamSpymasterKey = room.turn.turnTeam === "red" ? "redSpymasterId" : "blueSpymasterId";
     
     if (room[teamSpymasterKey] !== playerId) {
       throw new Error("Only the current team's Spymaster can send hints");
     }
 
+    if (room.turn.status !== "WAITING_HINT") {
+      throw new Error("A hint has already been given this turn");
+    }
+
     const hint: Hint = {
       word,
       number,
-      team: room.currentTeam,
+      team: room.turn.turnTeam,
     };
 
     updateHintHistory(room, hint);
+    room.turn.status = "GUESSING";
+    room.turn.hintWord = word;
+    room.turn.hintNumber = number;
+    room.turn.guessesLeft = number + 1;
+    room.version += 1;
     rooms.set(room.roomCode, room);
     return room;
   },
   endTurn: ({ roomCode, playerId }: { roomCode: string; playerId: string }) => {
     const room = ensureRoom(roomCode);
-    const teamSpymasterKey = room.currentTeam === "red" ? "redSpymasterId" : "blueSpymasterId";
+    const player = ensurePlayer(room, playerId);
     
-    if (room[teamSpymasterKey] !== playerId) {
-      throw new Error("Only the current team's Spymaster can end the turn");
+    if (player.team !== room.turn.turnTeam) {
+      throw new Error("Only the current team can end the turn");
     }
+
+    if (player.role !== "guesser") {
+      throw new Error("Only guessers can end the turn");
+    }
+
     room.currentTeam = room.currentTeam === "red" ? "blue" : "red";
+    room.turn.turnTeam = room.currentTeam;
+    room.turn.status = "WAITING_HINT";
+    room.turn.hintWord = null;
+    room.turn.hintNumber = null;
+    room.turn.guessesLeft = 0;
     room.currentHint = null;
+    room.version += 1;
     rooms.set(room.roomCode, room);
     return room;
   },

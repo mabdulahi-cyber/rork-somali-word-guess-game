@@ -48,23 +48,44 @@ export const trpcClient = trpc.createClient({
     httpLink({
       url: trpcUrl,
       transformer: superjson,
-      fetch(url, options) {
-        return fetch(url, {
-          ...options,
-          headers: {
-            ...options?.headers,
-            'Content-Type': 'application/json',
-          },
-        }).then(async (response) => {
+      async fetch(url, options) {
+        console.log('[tRPC] Request to:', url);
+        try {
+          const response = await fetch(url, {
+            ...options,
+            headers: {
+              ...options?.headers,
+              'Content-Type': 'application/json',
+            },
+          });
+
           if (!response.ok) {
             console.error('[tRPC] HTTP error:', response.status, response.statusText);
-            const text = await response.text();
-            if (text.includes('<!DOCTYPE') || text.includes('<html')) {
-              throw new Error('Server returned HTML instead of JSON. Check API endpoint configuration.');
+            
+            let errorText = '';
+            try {
+              errorText = await response.text();
+            } catch (readError) {
+              console.error('[tRPC] Failed to read error response:', readError);
+              throw new Error(`Server error ${response.status}: Unable to read response`);
             }
+
+            if (errorText.includes('<!DOCTYPE') || errorText.includes('<html')) {
+              console.error('[tRPC] Server returned HTML:', errorText.substring(0, 200));
+              throw new Error('Backend endpoint misconfigured on Netlify. Check your API route.');
+            }
+
+            throw new Error(`Server error ${response.status}: ${errorText.substring(0, 200)}`);
           }
+
           return response;
-        });
+        } catch (error) {
+          if (error instanceof TypeError && error.message.includes('fetch')) {
+            console.error('[tRPC] Network error:', error);
+            throw new Error('Network error. Please check your connection.');
+          }
+          throw error;
+        }
       },
     }),
   ],

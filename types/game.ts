@@ -16,6 +16,16 @@ export interface Hint {
   team: Team;
 }
 
+export type TurnStatus = 'WAITING_HINT' | 'GUESSING';
+
+export interface TurnState {
+  turnTeam: Team;
+  status: TurnStatus;
+  hintWord: string | null;
+  hintNumber: number | null;
+  guessesLeft: number;
+}
+
 export interface GameState {
   cards: Card[];
   currentTeam: Team;
@@ -25,6 +35,8 @@ export interface GameState {
   gameStarted: boolean;
   currentHint: Hint | null;
   hintHistory: Hint[];
+  turn: TurnState;
+  version: number;
 }
 
 export type Role = 'spymaster' | 'guesser';

@@ -184,7 +184,8 @@ export default function GameScreen() {
     if (!roomState || !currentPlayer) return false;
     return (
       currentPlayer.role === 'guesser' &&
-      currentPlayer.team === roomState.currentTeam &&
+      currentPlayer.team === roomState.turn.turnTeam &&
+      roomState.turn.status === 'GUESSING' &&
       !roomState.winner
     );
   }, [currentPlayer, roomState]);
@@ -252,7 +253,7 @@ export default function GameScreen() {
   };
 
   const handleEndTurn = async () => {
-    if (!isSpymaster) {
+    if (!canGuess) {
       return;
     }
     try {
@@ -261,6 +262,16 @@ export default function GameScreen() {
       console.warn('Failed to end turn', error);
     }
   };
+
+  const canEndTurn = useMemo(() => {
+    if (!roomState || !currentPlayer) return false;
+    return (
+      currentPlayer.role === 'guesser' &&
+      currentPlayer.team === roomState.turn.turnTeam &&
+      roomState.turn.status === 'GUESSING' &&
+      !roomState.winner
+    );
+  }, [currentPlayer, roomState]);
 
   const renderWinnerModal = () => {
     if (!roomState || !roomState.winner) return null;
@@ -488,12 +499,20 @@ export default function GameScreen() {
           </View>
           <View style={styles.turnDisplay}>
             <Text style={styles.turnLabel}>
-              {roomState.currentTeam === 'red' ? 'Red Team Turn' : 'Blue Team Turn'}
+              {roomState.turn.turnTeam === 'red' ? 'Red Team Turn' : 'Blue Team Turn'}
             </Text>
+            {roomState.turn.status === 'GUESSING' && roomState.turn.guessesLeft > 0 && (
+              <Text style={styles.guessesLeftText}>
+                {roomState.turn.guessesLeft} {roomState.turn.guessesLeft === 1 ? 'guess' : 'guesses'} left
+              </Text>
+            )}
+            {roomState.turn.status === 'WAITING_HINT' && (
+              <Text style={styles.waitingHintText}>Waiting for hint...</Text>
+            )}
             <View
               style={[
                 styles.turnDot,
-                { backgroundColor: roomState.currentTeam === 'red' ? '#ff6b6b' : '#4ecdc4' },
+                { backgroundColor: roomState.turn.turnTeam === 'red' ? '#ff6b6b' : '#4ecdc4' },
               ]}
             />
           </View>
@@ -559,19 +578,19 @@ export default function GameScreen() {
             ))}
           </View>
 
-          {!roomState.winner && (
+          {!roomState.winner && roomState.turn.status === 'GUESSING' && (
             <Pressable
               onPress={handleEndTurn}
-              style={[styles.endTurnButton, !isSpymaster && styles.disabledButton, { width: boardWidth }]}
-              disabled={!isSpymaster}
+              style={[styles.endTurnButton, !canEndTurn && styles.disabledButton, { width: boardWidth }]}
+              disabled={!canEndTurn}
               testID="end-turn-button"
             >
               <LinearGradient
-                colors={['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.08)']}
+                colors={canEndTurn ? ['#ffd369', '#f4c542'] : ['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.08)']}
                 style={styles.endTurnGradient}
               >
-                <Text style={styles.endTurnText}>
-                  {isSpymaster ? 'End Turn' : 'Only Spymaster can end turn'}
+                <Text style={[styles.endTurnText, canEndTurn && styles.endTurnTextActive]}>
+                  {canEndTurn ? 'End Turn' : 'Only current team guessers can end turn'}
                 </Text>
               </LinearGradient>
             </Pressable>
@@ -587,7 +606,7 @@ export default function GameScreen() {
           >
             <Text style={styles.panelTitle}>Spymaster</Text>
             {hintError ? <Text style={styles.errorText}>{hintError}</Text> : null}
-            {isSpymaster ? (
+            {isSpymaster && roomState.turn.status === 'WAITING_HINT' && roomState.turn.turnTeam === currentPlayer?.team ? (
               <View style={styles.inputRow}>
                 <View style={styles.hintInputContainer}>
                   <Text style={styles.inputLabel}>Hint Word</Text>
@@ -648,8 +667,12 @@ export default function GameScreen() {
                   </LinearGradient>
                 </Pressable>
               </View>
+            ) : isSpymaster && roomState.turn.status === 'GUESSING' ? (
+              <Text style={styles.helperText}>Your team is guessing. Wait for them to finish.</Text>
+            ) : isSpymaster && roomState.turn.turnTeam !== currentPlayer?.team ? (
+              <Text style={styles.helperText}>It&apos;s the other team&apos;s turn.</Text>
             ) : (
-              <Text style={styles.helperText}>Only the Spymaster can send hints right now.</Text>
+              <Text style={styles.helperText}>Only the Spymaster can send hints.</Text>
             )}
           </LinearGradient>
         </View>
@@ -923,6 +946,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#ffffff',
+  },
+  endTurnTextActive: {
+    color: '#16213e',
+  },
+  guessesLeftText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffd369',
+  },
+  waitingHintText: {
+    fontSize: 12,
+    fontStyle: 'italic' as const,
+    color: '#c0c4d6',
   },
   disabledButton: {
     opacity: 0.5,
