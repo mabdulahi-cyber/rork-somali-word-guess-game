@@ -12,6 +12,7 @@ interface GameContextValue {
   roomState: RoomState | null;
   currentPlayer: Player | null;
   isRoomLoading: boolean;
+  isInitializing: boolean;
   createRoom: (name: string) => Promise<void>;
   joinRoom: (name: string, code: string) => Promise<void>;
   selectTeam: (team: Team) => Promise<void>;
@@ -25,6 +26,7 @@ interface GameContextValue {
 }
 
 const CLIENT_ID_STORAGE_KEY = "somali-codenames.clientId" as const;
+const ROOM_CODE_STORAGE_KEY = "somali-codenames.roomCode" as const;
 
 const generateClientId = (): string => {
   const s4 = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
@@ -238,6 +240,7 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [roomState, setRoomState] = useState<RoomState | null>(null);
   const [isRoomLoading, setIsRoomLoading] = useState<boolean>(false);
+  const [isInitializing, setIsInitializing] = useState<boolean>(true);
 
 
   useEffect(() => {
@@ -247,6 +250,18 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       if (cancelled) return;
       setClientId(id);
       console.log("[GameContext] clientId", id);
+
+      try {
+        const storedRoomCode = await AsyncStorage.getItem(ROOM_CODE_STORAGE_KEY);
+        if (storedRoomCode?.trim()) {
+          console.log("[GameContext] Loaded roomCode from storage:", storedRoomCode);
+          setRoomCode(storedRoomCode);
+        }
+      } catch (error) {
+        console.warn("[GameContext] Failed to load roomCode from storage", error);
+      } finally {
+        setIsInitializing(false);
+      }
     };
     void run();
 
@@ -396,6 +411,7 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       setPlayerId(insertPlayer.data.id);
       setPlayerName(trimmedName);
       setRoomCode(code);
+      await AsyncStorage.setItem(ROOM_CODE_STORAGE_KEY, code);
     },
     [clientId]
   );
@@ -438,6 +454,7 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       setPlayerId(insertPlayer.data.id);
       setPlayerName(trimmedName);
       setRoomCode(trimmedCode);
+      await AsyncStorage.setItem(ROOM_CODE_STORAGE_KEY, trimmedCode);
     },
     [clientId]
   );
@@ -759,6 +776,7 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
     setRoomState(null);
     setPlayerId("");
     setPlayerName("");
+    void AsyncStorage.removeItem(ROOM_CODE_STORAGE_KEY);
   }, [playerId, roomCode]);
 
   return {
@@ -768,6 +786,7 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
     roomState,
     currentPlayer,
     isRoomLoading,
+    isInitializing,
     createRoom,
     joinRoom,
     selectTeam,

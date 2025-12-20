@@ -149,11 +149,14 @@ export default function GameScreen() {
     currentPlayer,
     setRole,
     selectTeam,
+    isRoomLoading,
+    isInitializing,
   } = useGame();
 
   const [hintWord, setHintWord] = useState<string>('');
   const [hintNumber, setHintNumber] = useState<number>(1);
   const [hintError, setHintError] = useState<string>('');
+  const [roomNotFound, setRoomNotFound] = useState<boolean>(false);
 
   const isWeb = Platform.OS === 'web';
 
@@ -170,10 +173,25 @@ export default function GameScreen() {
   }, [boardWidth]);
 
   useEffect(() => {
+    if (isInitializing) return;
+    
     if (!roomCode) {
+      console.log('[Game] No roomCode, redirecting to home');
       router.replace('/');
     }
-  }, [roomCode, router]);
+  }, [roomCode, router, isInitializing]);
+
+  useEffect(() => {
+    if (isRoomLoading || isInitializing) {
+      setRoomNotFound(false);
+      return;
+    }
+
+    if (roomCode && !roomState) {
+      console.log('[Game] Room not found for code:', roomCode);
+      setRoomNotFound(true);
+    }
+  }, [roomCode, roomState, isRoomLoading, isInitializing]);
 
   const isSpymaster = useMemo(() => {
     if (!roomState || !currentPlayer || !currentPlayer.team) return false;
@@ -329,11 +347,45 @@ export default function GameScreen() {
     }
   };
 
-  if (!roomState) {
+  if (isInitializing || (isRoomLoading && !roomState)) {
     return (
       <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#ffd369" />
         <Text style={styles.loadingText}>Syncing room...</Text>
+      </LinearGradient>
+    );
+  }
+
+  if (roomNotFound) {
+    return (
+      <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.loadingContainer}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Room Not Found</Text>
+          <Text style={styles.errorMessage}>
+            The room code {roomCode} doesn&apos;t exist or has expired.
+          </Text>
+          <Pressable
+            onPress={handleGoHome}
+            style={styles.errorButton}
+            testID="go-home-from-error"
+          >
+            <LinearGradient
+              colors={['#ffd369', '#f4c542']}
+              style={styles.errorButtonGradient}
+            >
+              <Text style={styles.errorButtonText}>Go to Home</Text>
+            </LinearGradient>
+          </Pressable>
+        </View>
+      </LinearGradient>
+    );
+  }
+
+  if (!roomState) {
+    return (
+      <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#ffd369" />
+        <Text style={styles.loadingText}>Loading...</Text>
       </LinearGradient>
     );
   }
@@ -586,6 +638,39 @@ const styles = StyleSheet.create({
     marginTop: 12,
     color: '#ffffff',
     fontSize: 16,
+  },
+  errorContainer: {
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    maxWidth: 500,
+  },
+  errorTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#ffffff',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontSize: 16,
+    color: '#c0c4d6',
+    marginBottom: 32,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  errorButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  errorButtonGradient: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  errorButtonText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#16213e',
   },
   header: {
     paddingTop: 12,
