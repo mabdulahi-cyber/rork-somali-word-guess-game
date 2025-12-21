@@ -259,24 +259,24 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
     } catch (error: any) {
       console.error('[GameContext] createRoom - FAILED');
       
-      // Extract Supabase error details
+      // Extract error details
       const errorMessage = error?.message || 'Unknown error';
-      const errorCode = error?.code || 'UNKNOWN';
+      const errorCode = error?.code || '';
       const errorDetails = error?.details || '';
       const errorHint = error?.hint || '';
       
-      // Structured logging
-      console.error('[GameContext] CreateRoom Supabase Error', {
+      // Structured logging with JSON.stringify for proper console output
+      console.error('[GameContext] CreateRoom Error:', JSON.stringify({
         message: errorMessage,
         code: errorCode,
         details: errorDetails,
         hint: errorHint,
-        fullError: error
-      });
+        name: error?.name
+      }, null, 2));
       
       // Build detailed error message
       let finalMessage = errorMessage;
-      if (errorCode && errorCode !== 'UNKNOWN') {
+      if (errorCode) {
         finalMessage += ` (Code: ${errorCode})`;
       }
       if (errorDetails) {

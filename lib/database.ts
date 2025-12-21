@@ -45,11 +45,12 @@ export const getDB = async (): Promise<Surreal> => {
     console.log('[DB] Successfully connected and authenticated to Rork database');
     return _db;
   } catch (error: any) {
-    console.error('[DB] Connection failed:', {
+    console.error('[DB] Connection failed:', JSON.stringify({
       message: error?.message,
       name: error?.name,
+      code: error?.code,
       stack: error?.stack?.substring(0, 200)
-    });
+    }, null, 2));
     
     _db = null;
     
