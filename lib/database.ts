@@ -6,8 +6,8 @@ let _supabase: SupabaseClient | null = null;
 export const getSupabase = (): SupabaseClient => {
   if (_supabase) return _supabase;
 
-  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   console.log('[DB] Supabase environment check:', {
     hasUrl: !!supabaseUrl,
@@ -16,10 +16,8 @@ export const getSupabase = (): SupabaseClient => {
   });
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    const missing: string[] = [];
-    if (!supabaseUrl) missing.push('EXPO_PUBLIC_SUPABASE_URL');
-    if (!supabaseAnonKey) missing.push('EXPO_PUBLIC_SUPABASE_ANON_KEY');
-    throw new Error(`[DB] Missing Supabase environment variables: ${missing.join(', ')}. Please set these in Netlify environment settings.`);
+    console.error('[DB] Missing Supabase environment variables');
+    throw new Error('Game configuration error. Please try again later.');
   }
 
   _supabase = createClient(supabaseUrl, supabaseAnonKey);
