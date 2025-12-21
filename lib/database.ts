@@ -1,109 +1,40 @@
-import Surreal from 'surrealdb.js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { CardType, Team } from '@/types/game';
-
-type NormalizedDbError = {
-  name?: string;
-  message: string;
-  code?: string;
-  details?: string;
-  hint?: string;
-};
 
 const resolveEnv = (key: string): string | undefined => {
   const env = (globalThis as any)?.process?.env as Record<string, string | undefined> | undefined;
   return env?.[key];
 };
 
-const normalizeUnknownError = (error: unknown): NormalizedDbError => {
-  if (error && typeof error === 'object') {
-    const anyErr = error as any;
-    const message =
-      (typeof anyErr?.message === 'string' && anyErr.message) ||
-      (typeof anyErr?.toString === 'function' ? String(anyErr.toString()) : 'Unknown error');
+let _supabase: SupabaseClient | null = null;
 
-    return {
-      name: typeof anyErr?.name === 'string' ? anyErr.name : undefined,
-      message,
-      code: typeof anyErr?.code === 'string' ? anyErr.code : undefined,
-      details: typeof anyErr?.details === 'string' ? anyErr.details : undefined,
-      hint: typeof anyErr?.hint === 'string' ? anyErr.hint : undefined,
-    };
-  }
+export const getSupabase = (): SupabaseClient => {
+  if (_supabase) return _supabase;
 
-  if (typeof error === 'string') return { message: error };
-  return { message: 'Unknown error' };
-};
+  const supabaseUrl = resolveEnv('EXPO_PUBLIC_SUPABASE_URL');
+  const supabaseAnonKey = resolveEnv('EXPO_PUBLIC_SUPABASE_ANON_KEY');
 
-
-
-
-
-let _db: Surreal | null = null;
-let _connectPromise: Promise<Surreal> | null = null;
-
-export const getDB = async (): Promise<Surreal> => {
-  if (_db) return _db;
-  if (_connectPromise) return _connectPromise;
-
-  const endpoint = resolveEnv('EXPO_PUBLIC_RORK_DB_ENDPOINT');
-  const namespace = resolveEnv('EXPO_PUBLIC_RORK_DB_NAMESPACE');
-  const token = resolveEnv('EXPO_PUBLIC_RORK_DB_TOKEN');
-
-  console.log('[DB] Environment check:', {
-    hasEndpoint: !!endpoint,
-    hasNamespace: !!namespace,
-    hasToken: !!token,
-    endpointPreview: endpoint ? `${endpoint.slice(0, 80)}...` : null,
+  console.log('[DB] Supabase environment check:', {
+    hasUrl: !!supabaseUrl,
+    hasKey: !!supabaseAnonKey,
+    urlPreview: supabaseUrl ? `${supabaseUrl.slice(0, 40)}...` : null,
   });
 
-  if (!endpoint || !namespace || !token) {
+  if (!supabaseUrl || !supabaseAnonKey) {
     const missing: string[] = [];
-    if (!endpoint) missing.push('EXPO_PUBLIC_RORK_DB_ENDPOINT');
-    if (!namespace) missing.push('EXPO_PUBLIC_RORK_DB_NAMESPACE');
-    if (!token) missing.push('EXPO_PUBLIC_RORK_DB_TOKEN');
-    throw new Error(`[DB] Missing environment variables: ${missing.join(', ')}`);
+    if (!supabaseUrl) missing.push('EXPO_PUBLIC_SUPABASE_URL');
+    if (!supabaseAnonKey) missing.push('EXPO_PUBLIC_SUPABASE_ANON_KEY');
+    throw new Error(`[DB] Missing Supabase environment variables: ${missing.join(', ')}`);
   }
 
-  _connectPromise = (async () => {
-    const instance = new Surreal();
-
-    try {
-      console.log('[DB] Connecting to SurrealDB…');
-      await instance.connect(endpoint, {
-        namespace,
-        database: 'rork',
-      });
-
-      console.log('[DB] Authenticating…');
-      await instance.authenticate(token);
-
-      console.log('[DB] Connected + authenticated');
-      _db = instance;
-      return instance;
-    } catch (error) {
-      const e = normalizeUnknownError(error);
-      console.error('[DB] Connection failed:', e.message);
-      console.error('[DB] Error details:', JSON.stringify({
-        message: e.message,
-        code: e.code,
-        details: e.details,
-        hint: e.hint,
-        name: e.name,
-        rawError: error,
-      }, null, 2));
-
-      _db = null;
-      throw new Error(e.message);
-    } finally {
-      _connectPromise = null;
-    }
-  })();
-
-  return _connectPromise;
+  _supabase = createClient(supabaseUrl, supabaseAnonKey);
+  console.log('[DB] Supabase client initialized');
+  
+  return _supabase;
 };
 
 interface DBRoom {
-  id: string;
+  id?: string;
   code: string;
   words: string[];
   key_map: CardType[];
@@ -116,6 +47,8 @@ interface DBRoom {
   guesses_left: number;
   winner_team?: Team;
   version: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface DBPlayer {
@@ -125,14 +58,15 @@ interface DBPlayer {
   team: Team | null;
   role: 'spymaster' | 'guesser';
   is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export const db = {
   async createRoom(code: string, words: string[], keyMap: CardType[], startingTeam: Team): Promise<DBRoom> {
-    const instance = await getDB();
-    const roomId = `rooms:${code}`;
+    const supabase = getSupabase();
     
-    const result = await instance.create(roomId, {
+    const roomData: DBRoom = {
       code,
       words,
       key_map: keyMap,
@@ -142,66 +76,144 @@ export const db = {
       game_status: 'PLAYING',
       guesses_left: 0,
       version: 1,
-    });
-    
-    return result as any as DBRoom;
+    };
+
+    const { data, error } = await supabase
+      .from('rooms')
+      .insert(roomData)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[DB] createRoom error:', error);
+      throw new Error(error.message);
+    }
+
+    return data;
   },
 
   async getRoom(code: string): Promise<DBRoom | null> {
-    const instance = await getDB();
-    try {
-      const result = await instance.select(`rooms:${code}`);
-      return (result as any) || null;
-    } catch {
-      return null;
+    const supabase = getSupabase();
+    
+    const { data, error } = await supabase
+      .from('rooms')
+      .select('*')
+      .eq('code', code)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return null;
+      }
+      console.error('[DB] getRoom error:', error);
+      throw new Error(error.message);
     }
+
+    return data;
   },
 
   async updateRoom(code: string, updates: Partial<DBRoom>): Promise<void> {
-    const instance = await getDB();
-    await instance.merge(`rooms:${code}`, updates);
+    const supabase = getSupabase();
+    
+    const { error } = await supabase
+      .from('rooms')
+      .update(updates)
+      .eq('code', code);
+
+    if (error) {
+      console.error('[DB] updateRoom error:', error);
+      throw new Error(error.message);
+    }
   },
 
   async createPlayer(id: string, roomCode: string, name: string): Promise<DBPlayer> {
-    const instance = await getDB();
-    const playerId = `players:${id}`;
+    const supabase = getSupabase();
     
-    const result = await instance.create(playerId, {
+    const playerData: DBPlayer = {
       id,
       room_code: roomCode,
       name,
       team: null,
       role: 'guesser',
       is_active: true,
-    });
-    
-    return result as any as DBPlayer;
+    };
+
+    const { data, error } = await supabase
+      .from('players')
+      .insert(playerData)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[DB] createPlayer error:', error);
+      throw new Error(error.message);
+    }
+
+    return data;
   },
 
   async getPlayer(id: string): Promise<DBPlayer | null> {
-    const instance = await getDB();
-    try {
-      const result = await instance.select(`players:${id}`);
-      return (result as any) || null;
-    } catch {
-      return null;
+    const supabase = getSupabase();
+    
+    const { data, error } = await supabase
+      .from('players')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return null;
+      }
+      console.error('[DB] getPlayer error:', error);
+      throw new Error(error.message);
     }
+
+    return data;
   },
 
   async updatePlayer(id: string, updates: Partial<DBPlayer>): Promise<void> {
-    const instance = await getDB();
-    await instance.merge(`players:${id}`, updates);
+    const supabase = getSupabase();
+    
+    const { error } = await supabase
+      .from('players')
+      .update(updates)
+      .eq('id', id);
+
+    if (error) {
+      console.error('[DB] updatePlayer error:', error);
+      throw new Error(error.message);
+    }
   },
 
   async getPlayersByRoom(roomCode: string): Promise<DBPlayer[]> {
-    const instance = await getDB();
-    const query = `SELECT * FROM players WHERE room_code = $roomCode AND is_active = true`;
-    const result = await instance.query(query, { roomCode });
-    return (result[0] as any) || [];
+    const supabase = getSupabase();
+    
+    const { data, error } = await supabase
+      .from('players')
+      .select('*')
+      .eq('room_code', roomCode)
+      .eq('is_active', true);
+
+    if (error) {
+      console.error('[DB] getPlayersByRoom error:', error);
+      throw new Error(error.message);
+    }
+
+    return data || [];
   },
 
   async deletePlayer(id: string): Promise<void> {
-    const instance = await getDB();
-    await instance.delete(`players:${id}`);
+    const supabase = getSupabase();
+    
+    const { error } = await supabase
+      .from('players')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('[DB] deletePlayer error:', error);
+      throw new Error(error.message);
+    }
   },
 };
