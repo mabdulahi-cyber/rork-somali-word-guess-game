@@ -228,13 +228,13 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       const details = typeof anyErr?.details === 'string' ? anyErr.details : '';
       const hint = typeof anyErr?.hint === 'string' ? anyErr.hint : '';
 
-      console.error('[GameContext] Backend Error (structured)', {
+      console.error('[GameContext] Backend Error (structured):', JSON.stringify({
         message,
         code,
         details,
         hint,
         name: typeof anyErr?.name === 'string' ? anyErr.name : undefined,
-      });
+      }, null, 2));
 
       let out = message;
       if (code) out += ` (${code})`;
@@ -290,7 +290,9 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       console.log('[GameContext] createRoom - SUCCESS', { code, playerId });
     } catch (error) {
       console.error('[GameContext] createRoom - FAILED');
+      console.error('[GameContext] createRoom error details:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
       const msg = normalizeErrorForUi(error);
+      console.error('[GameContext] createRoom normalized error:', msg);
       throw new Error(msg);
     }
   }, [playerId]);
@@ -329,7 +331,9 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       console.log('[GameContext] joinRoom - SUCCESS', { code: trimmedCode, playerId });
     } catch (error) {
       console.error('[GameContext] joinRoom - FAILED');
+      console.error('[GameContext] joinRoom error details:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
       const msg = normalizeErrorForUi(error);
+      console.error('[GameContext] joinRoom normalized error:', msg);
       throw new Error(msg);
     }
   }, [playerId]);

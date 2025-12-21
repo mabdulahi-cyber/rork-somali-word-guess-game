@@ -70,7 +70,8 @@ const preflightHttpEndpoint = async (endpoint: string): Promise<void> => {
     }
   } catch (error) {
     const e = normalizeUnknownError(error);
-    console.error('[DB] Endpoint preflight failed', e);
+    console.error('[DB] Endpoint preflight failed:', e.message);
+    console.error('[DB] Preflight error details:', JSON.stringify(e, null, 2));
     throw new Error(e.message);
   }
 };
@@ -128,13 +129,15 @@ export const getDB = async (): Promise<Surreal> => {
       return instance;
     } catch (error) {
       const e = normalizeUnknownError(error);
-      console.error('[DB] Connection failed', {
+      console.error('[DB] Connection failed:', e.message);
+      console.error('[DB] Error details:', JSON.stringify({
         message: e.message,
         code: e.code,
         details: e.details,
         hint: e.hint,
         name: e.name,
-      });
+        rawError: error,
+      }, null, 2));
 
       _db = null;
       throw new Error(e.message);
