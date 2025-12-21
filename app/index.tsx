@@ -88,12 +88,32 @@ export default function LobbyScreen() {
     setErrorMessage('');
   };
 
+  const normalizeUiError = (error: unknown, fallback: string): string => {
+    if (typeof error === 'string') return error;
+    if (error && typeof error === 'object') {
+      const anyErr = error as any;
+      const message =
+        (typeof anyErr?.message === 'string' && anyErr.message) ||
+        (typeof anyErr?.toString === 'function' ? String(anyErr.toString()) : fallback);
+      const code = typeof anyErr?.code === 'string' ? anyErr.code : '';
+      const details = typeof anyErr?.details === 'string' ? anyErr.details : '';
+      const hint = typeof anyErr?.hint === 'string' ? anyErr.hint : '';
+
+      let out = message;
+      if (code) out += ` (${code})`;
+      if (details) out += ` - ${details}`;
+      if (hint) out += ` Hint: ${hint}`;
+      return out;
+    }
+    return fallback;
+  };
+
   const handleTeamSelect = async (team: Team) => {
     try {
       await selectTeam(team);
       await setRole('guesser');
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to select team');
+      setErrorMessage(normalizeUiError(error, 'Unable to select team'));
     }
   };
 
@@ -101,7 +121,7 @@ export default function LobbyScreen() {
     try {
       await setRole('spymaster');
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to set role');
+      setErrorMessage(normalizeUiError(error, 'Unable to set role'));
     }
   };
 
@@ -109,7 +129,7 @@ export default function LobbyScreen() {
     try {
       await setRole('guesser');
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to set role');
+      setErrorMessage(normalizeUiError(error, 'Unable to set role'));
     }
   };
 

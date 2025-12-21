@@ -217,25 +217,54 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
     }
   }, [roomCode, fetchSnapshot]);
 
+  const normalizeErrorForUi = (error: unknown): string => {
+    if (typeof error === 'string') return error;
+    if (error && typeof error === 'object') {
+      const anyErr = error as any;
+      const message =
+        (typeof anyErr?.message === 'string' && anyErr.message) ||
+        (typeof anyErr?.toString === 'function' ? String(anyErr.toString()) : 'Unknown error');
+      const code = typeof anyErr?.code === 'string' ? anyErr.code : '';
+      const details = typeof anyErr?.details === 'string' ? anyErr.details : '';
+      const hint = typeof anyErr?.hint === 'string' ? anyErr.hint : '';
+
+      console.error('[GameContext] Backend Error (structured)', {
+        message,
+        code,
+        details,
+        hint,
+        name: typeof anyErr?.name === 'string' ? anyErr.name : undefined,
+      });
+
+      let out = message;
+      if (code) out += ` (${code})`;
+      if (details) out += ` - ${details}`;
+      if (hint) out += ` Hint: ${hint}`;
+      return out;
+    }
+
+    return 'Unknown error';
+  };
+
   const createRoom = useCallback(async (name: string) => {
     const trimmedName = name.trim();
-    if (!trimmedName) throw new Error("Name is required");
-    if (!playerId) throw new Error("Player ID not ready");
+    if (!trimmedName) throw new Error('Name is required');
+    if (!playerId) throw new Error('Player ID not ready');
 
     const code = generateRoomCode();
     const { cards, startingTeam } = generateBoard();
 
-    const words = cards.map(c => c.word);
-    const keyMap = cards.map(c => c.type);
+    const words = cards.map((c) => c.word);
+    const keyMap = cards.map((c) => c.type);
 
     try {
       console.log('[GameContext] createRoom - generating code:', code);
-      
+
       await db.createRoom(code, words, keyMap, startingTeam);
       console.log('[GameContext] createRoom - Room created successfully:', code);
 
-      console.log('[GameContext] createRoom - Creating player:', playerId);
-      
+      console.log('[GameContext] createRoom - Creating/updating player:', playerId);
+
       const existingPlayer = await db.getPlayer(playerId);
       if (existingPlayer) {
         await db.updatePlayer(playerId, {
@@ -247,64 +276,42 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
         });
       } else {
         await db.createPlayer(playerId, code, trimmedName);
-        await db.updatePlayer(playerId, { team: 'red' });
+        await db.updatePlayer(playerId, {
+          team: 'red',
+          role: 'guesser',
+          is_active: true,
+        });
       }
-      
-      console.log('[GameContext] createRoom - Player added successfully');
 
       setPlayerName(trimmedName);
       setRoomCode(code);
       await AsyncStorage.setItem(ROOM_CODE_STORAGE_KEY, code);
-      console.log('[GameContext] createRoom - SUCCESS! Room code:', code);
-    } catch (error: any) {
+
+      console.log('[GameContext] createRoom - SUCCESS', { code, playerId });
+    } catch (error) {
       console.error('[GameContext] createRoom - FAILED');
-      
-      // Extract error details
-      const errorMessage = error?.message || 'Unknown error';
-      const errorCode = error?.code || '';
-      const errorDetails = error?.details || '';
-      const errorHint = error?.hint || '';
-      
-      // Structured logging with JSON.stringify for proper console output
-      console.error('[GameContext] CreateRoom Error:', JSON.stringify({
-        message: errorMessage,
-        code: errorCode,
-        details: errorDetails,
-        hint: errorHint,
-        name: error?.name
-      }, null, 2));
-      
-      // Build detailed error message
-      let finalMessage = errorMessage;
-      if (errorCode) {
-        finalMessage += ` (Code: ${errorCode})`;
-      }
-      if (errorDetails) {
-        finalMessage += ` - ${errorDetails}`;
-      }
-      if (errorHint) {
-        finalMessage += ` Hint: ${errorHint}`;
-      }
-      
-      throw new Error(finalMessage);
+      const msg = normalizeErrorForUi(error);
+      throw new Error(msg);
     }
   }, [playerId]);
 
   const joinRoom = useCallback(async (name: string, code: string) => {
     const trimmedName = name.trim();
     const trimmedCode = code.trim().toUpperCase();
-    if (!trimmedName || !trimmedCode) throw new Error("Name and room code are required");
-    if (!playerId) throw new Error("Player ID not ready");
+    if (!trimmedName || !trimmedCode) throw new Error('Name and room code are required');
+    if (!playerId) throw new Error('Player ID not ready');
 
     try {
+      console.log('[GameContext] joinRoom - checking room exists', { code: trimmedCode });
       const room = await db.getRoom(trimmedCode);
 
       if (!room) {
-        throw new Error("Room not found");
+        throw new Error('Room not found');
       }
 
+      console.log('[GameContext] joinRoom - creating/updating player', { playerId, code: trimmedCode });
       const existing = await db.getPlayer(playerId);
-        
+
       if (existing) {
         await db.updatePlayer(playerId, {
           room_code: trimmedCode,
@@ -318,9 +325,12 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       setPlayerName(trimmedName);
       setRoomCode(trimmedCode);
       await AsyncStorage.setItem(ROOM_CODE_STORAGE_KEY, trimmedCode);
+
+      console.log('[GameContext] joinRoom - SUCCESS', { code: trimmedCode, playerId });
     } catch (error) {
-      console.error("[GameContext] joinRoom error", error);
-      throw error;
+      console.error('[GameContext] joinRoom - FAILED');
+      const msg = normalizeErrorForUi(error);
+      throw new Error(msg);
     }
   }, [playerId]);
 

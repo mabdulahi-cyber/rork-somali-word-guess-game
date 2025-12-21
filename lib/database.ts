@@ -1,14 +1,86 @@
 import Surreal from 'surrealdb.js';
 import type { CardType, Team } from '@/types/game';
 
+type NormalizedDbError = {
+  name?: string;
+  message: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+};
+
 const resolveEnv = (key: string): string | undefined => {
-  return (process.env as Record<string, string | undefined>)[key];
+  const env = (globalThis as any)?.process?.env as Record<string, string | undefined> | undefined;
+  return env?.[key];
+};
+
+const normalizeUnknownError = (error: unknown): NormalizedDbError => {
+  if (error && typeof error === 'object') {
+    const anyErr = error as any;
+    const message =
+      (typeof anyErr?.message === 'string' && anyErr.message) ||
+      (typeof anyErr?.toString === 'function' ? String(anyErr.toString()) : 'Unknown error');
+
+    return {
+      name: typeof anyErr?.name === 'string' ? anyErr.name : undefined,
+      message,
+      code: typeof anyErr?.code === 'string' ? anyErr.code : undefined,
+      details: typeof anyErr?.details === 'string' ? anyErr.details : undefined,
+      hint: typeof anyErr?.hint === 'string' ? anyErr.hint : undefined,
+    };
+  }
+
+  if (typeof error === 'string') return { message: error };
+  return { message: 'Unknown error' };
+};
+
+const looksLikeMisconfiguredEndpoint = (endpoint: string): boolean => {
+  const lower = endpoint.toLowerCase();
+  if (lower.includes('netlify') || lower.includes('/.netlify/functions')) return true;
+  if (lower.includes('/api') || lower.endsWith('/api')) return true;
+  return false;
+};
+
+const preflightHttpEndpoint = async (endpoint: string): Promise<void> => {
+  if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://')) return;
+
+  try {
+    const resp = await fetch(endpoint, { method: 'GET' });
+    const ct = resp.headers.get('content-type') ?? '';
+
+    if (!resp.ok) {
+      const body = await resp.text();
+      console.error('[DB] Endpoint preflight non-OK response', {
+        status: resp.status,
+        contentType: ct,
+        bodyPreview: body.slice(0, 160),
+      });
+
+      throw new Error(
+        `[DB] Database endpoint responded with HTTP ${resp.status}. Please verify EXPO_PUBLIC_RORK_DB_ENDPOINT (it must point to SurrealDB, not your frontend host).`,
+      );
+    }
+
+    if (ct.includes('text/html')) {
+      const body = await resp.text();
+      console.error('[DB] Endpoint preflight returned HTML', { bodyPreview: body.slice(0, 160) });
+      throw new Error(
+        '[DB] Database endpoint appears to be an HTML page (likely a frontend host / 404). Please verify EXPO_PUBLIC_RORK_DB_ENDPOINT points to the database RPC endpoint.',
+      );
+    }
+  } catch (error) {
+    const e = normalizeUnknownError(error);
+    console.error('[DB] Endpoint preflight failed', e);
+    throw new Error(e.message);
+  }
 };
 
 let _db: Surreal | null = null;
+let _connectPromise: Promise<Surreal> | null = null;
 
 export const getDB = async (): Promise<Surreal> => {
   if (_db) return _db;
+  if (_connectPromise) return _connectPromise;
 
   const endpoint = resolveEnv('EXPO_PUBLIC_RORK_DB_ENDPOINT');
   const namespace = resolveEnv('EXPO_PUBLIC_RORK_DB_NAMESPACE');
@@ -18,48 +90,60 @@ export const getDB = async (): Promise<Surreal> => {
     hasEndpoint: !!endpoint,
     hasNamespace: !!namespace,
     hasToken: !!token,
-    endpoint: endpoint?.substring(0, 30) + '...'
+    endpointPreview: endpoint ? `${endpoint.slice(0, 80)}...` : null,
   });
 
   if (!endpoint || !namespace || !token) {
-    const missing = [];
+    const missing: string[] = [];
     if (!endpoint) missing.push('EXPO_PUBLIC_RORK_DB_ENDPOINT');
     if (!namespace) missing.push('EXPO_PUBLIC_RORK_DB_NAMESPACE');
     if (!token) missing.push('EXPO_PUBLIC_RORK_DB_TOKEN');
     throw new Error(`[DB] Missing environment variables: ${missing.join(', ')}`);
   }
 
-  _db = new Surreal();
-  
-  try {
-    console.log('[DB] Attempting to connect to:', endpoint.substring(0, 50) + '...');
-    
-    await _db.connect(endpoint, {
-      namespace,
-      database: 'rork',
-    });
-    
-    console.log('[DB] Connection established, authenticating...');
-    await _db.authenticate(token);
-    
-    console.log('[DB] Successfully connected and authenticated to Rork database');
-    return _db;
-  } catch (error: any) {
-    console.error('[DB] Connection failed:', JSON.stringify({
-      message: error?.message,
-      name: error?.name,
-      code: error?.code,
-      stack: error?.stack?.substring(0, 200)
-    }, null, 2));
-    
-    _db = null;
-    
-    if (error?.message?.includes('not_found') || error?.message?.includes('Unexpected character')) {
-      throw new Error('[DB] Database endpoint not found. Please verify EXPO_PUBLIC_RORK_DB_ENDPOINT is correct.');
-    }
-    
-    throw new Error(`[DB] Failed to connect: ${error?.message || 'Unknown error'}`);
+  if (looksLikeMisconfiguredEndpoint(endpoint)) {
+    throw new Error(
+      '[DB] EXPO_PUBLIC_RORK_DB_ENDPOINT looks misconfigured (it points to a frontend/API route). It must point to the SurrealDB RPC endpoint (often ends with /rpc).',
+    );
   }
+
+  _connectPromise = (async () => {
+    const instance = new Surreal();
+
+    try {
+      console.log('[DB] Preflighting endpoint (http only)');
+      await preflightHttpEndpoint(endpoint);
+
+      console.log('[DB] Connecting to SurrealDB…');
+      await instance.connect(endpoint, {
+        namespace,
+        database: 'rork',
+      });
+
+      console.log('[DB] Authenticating…');
+      await instance.authenticate(token);
+
+      console.log('[DB] Connected + authenticated');
+      _db = instance;
+      return instance;
+    } catch (error) {
+      const e = normalizeUnknownError(error);
+      console.error('[DB] Connection failed', {
+        message: e.message,
+        code: e.code,
+        details: e.details,
+        hint: e.hint,
+        name: e.name,
+      });
+
+      _db = null;
+      throw new Error(e.message);
+    } finally {
+      _connectPromise = null;
+    }
+  })();
+
+  return _connectPromise;
 };
 
 interface DBRoom {
