@@ -14,25 +14,50 @@ export const getDB = async (): Promise<Surreal> => {
   const namespace = resolveEnv('EXPO_PUBLIC_RORK_DB_NAMESPACE');
   const token = resolveEnv('EXPO_PUBLIC_RORK_DB_TOKEN');
 
+  console.log('[DB] Environment check:', {
+    hasEndpoint: !!endpoint,
+    hasNamespace: !!namespace,
+    hasToken: !!token,
+    endpoint: endpoint?.substring(0, 30) + '...'
+  });
+
   if (!endpoint || !namespace || !token) {
-    throw new Error('[DB] Missing Rork database env vars');
+    const missing = [];
+    if (!endpoint) missing.push('EXPO_PUBLIC_RORK_DB_ENDPOINT');
+    if (!namespace) missing.push('EXPO_PUBLIC_RORK_DB_NAMESPACE');
+    if (!token) missing.push('EXPO_PUBLIC_RORK_DB_TOKEN');
+    throw new Error(`[DB] Missing environment variables: ${missing.join(', ')}`);
   }
 
   _db = new Surreal();
   
   try {
+    console.log('[DB] Attempting to connect to:', endpoint.substring(0, 50) + '...');
+    
     await _db.connect(endpoint, {
       namespace,
       database: 'rork',
     });
     
+    console.log('[DB] Connection established, authenticating...');
     await _db.authenticate(token);
     
-    console.log('[DB] Connected to Rork database');
+    console.log('[DB] Successfully connected and authenticated to Rork database');
     return _db;
-  } catch (error) {
-    console.error('[DB] Connection failed:', error);
-    throw error;
+  } catch (error: any) {
+    console.error('[DB] Connection failed:', {
+      message: error?.message,
+      name: error?.name,
+      stack: error?.stack?.substring(0, 200)
+    });
+    
+    _db = null;
+    
+    if (error?.message?.includes('not_found') || error?.message?.includes('Unexpected character')) {
+      throw new Error('[DB] Database endpoint not found. Please verify EXPO_PUBLIC_RORK_DB_ENDPOINT is correct.');
+    }
+    
+    throw new Error(`[DB] Failed to connect: ${error?.message || 'Unknown error'}`);
   }
 };
 
