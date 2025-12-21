@@ -36,40 +36,7 @@ const normalizeUnknownError = (error: unknown): NormalizedDbError => {
 
 
 
-const preflightHttpEndpoint = async (endpoint: string): Promise<void> => {
-  if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://')) return;
 
-  try {
-    const resp = await fetch(endpoint, { method: 'GET' });
-    const ct = resp.headers.get('content-type') ?? '';
-
-    if (!resp.ok) {
-      const body = await resp.text();
-      console.error('[DB] Endpoint preflight non-OK response', {
-        status: resp.status,
-        contentType: ct,
-        bodyPreview: body.slice(0, 160),
-      });
-
-      throw new Error(
-        `[DB] Database endpoint responded with HTTP ${resp.status}. Please verify EXPO_PUBLIC_RORK_DB_ENDPOINT (it must point to SurrealDB, not your frontend host).`,
-      );
-    }
-
-    if (ct.includes('text/html')) {
-      const body = await resp.text();
-      console.error('[DB] Endpoint preflight returned HTML', { bodyPreview: body.slice(0, 160) });
-      throw new Error(
-        '[DB] Database endpoint appears to be an HTML page (likely a frontend host / 404). Please verify EXPO_PUBLIC_RORK_DB_ENDPOINT points to the database RPC endpoint.',
-      );
-    }
-  } catch (error) {
-    const e = normalizeUnknownError(error);
-    console.error('[DB] Endpoint preflight failed:', e.message);
-    console.error('[DB] Preflight error details:', JSON.stringify(e, null, 2));
-    throw new Error(e.message);
-  }
-};
 
 let _db: Surreal | null = null;
 let _connectPromise: Promise<Surreal> | null = null;
@@ -101,9 +68,6 @@ export const getDB = async (): Promise<Surreal> => {
     const instance = new Surreal();
 
     try {
-      console.log('[DB] Preflighting endpoint (http only)');
-      await preflightHttpEndpoint(endpoint);
-
       console.log('[DB] Connecting to SurrealDB…');
       await instance.connect(endpoint, {
         namespace,
