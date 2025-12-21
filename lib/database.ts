@@ -1,18 +1,13 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { CardType, Team } from '@/types/game';
 
-const resolveEnv = (key: string): string | undefined => {
-  const env = (globalThis as any)?.process?.env as Record<string, string | undefined> | undefined;
-  return env?.[key];
-};
-
 let _supabase: SupabaseClient | null = null;
 
 export const getSupabase = (): SupabaseClient => {
   if (_supabase) return _supabase;
 
-  const supabaseUrl = resolveEnv('EXPO_PUBLIC_SUPABASE_URL');
-  const supabaseAnonKey = resolveEnv('EXPO_PUBLIC_SUPABASE_ANON_KEY');
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   console.log('[DB] Supabase environment check:', {
     hasUrl: !!supabaseUrl,
@@ -22,9 +17,9 @@ export const getSupabase = (): SupabaseClient => {
 
   if (!supabaseUrl || !supabaseAnonKey) {
     const missing: string[] = [];
-    if (!supabaseUrl) missing.push('EXPO_PUBLIC_SUPABASE_URL');
-    if (!supabaseAnonKey) missing.push('EXPO_PUBLIC_SUPABASE_ANON_KEY');
-    throw new Error(`[DB] Missing Supabase environment variables: ${missing.join(', ')}`);
+    if (!supabaseUrl) missing.push('VITE_SUPABASE_URL');
+    if (!supabaseAnonKey) missing.push('VITE_SUPABASE_ANON_KEY');
+    throw new Error(`[DB] Missing Supabase environment variables: ${missing.join(', ')}. Please set these in Netlify environment settings.`);
   }
 
   _supabase = createClient(supabaseUrl, supabaseAnonKey);
