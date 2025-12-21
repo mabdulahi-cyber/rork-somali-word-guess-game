@@ -1,11 +1,54 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CardType, Team } from '@/types/game';
+
+// Custom storage adapter to handle corrupted data and ensure safe JSON parsing
+const SafeStorage = {
+  getItem: async (key: string): Promise<string | null> => {
+    try {
+      const value = await AsyncStorage.getItem(key);
+      if (!value) return null;
+      
+      // Check for corrupted "[object Object]" string which causes JSON parse errors
+      if (value.startsWith('[object') || value === 'undefined' || value === 'null') {
+        console.warn('[DB] Found corrupted storage key, removing:', key);
+        await AsyncStorage.removeItem(key);
+        return null;
+      }
+      
+      return value;
+    } catch (error) {
+      console.warn('[DB] SafeStorage getItem error:', error);
+      return null;
+    }
+  },
+  setItem: async (key: string, value: string) => {
+    try {
+      // Prevent writing corrupted values
+      if (value.startsWith('[object')) {
+        console.error('[DB] Attempted to write corrupted value to storage:', key);
+        return;
+      }
+      await AsyncStorage.setItem(key, value);
+    } catch (error) {
+      console.warn('[DB] SafeStorage setItem error:', error);
+    }
+  },
+  removeItem: async (key: string) => {
+    try {
+      await AsyncStorage.removeItem(key);
+    } catch (error) {
+      console.warn('[DB] SafeStorage removeItem error:', error);
+    }
+  },
+};
 
 let _supabase: SupabaseClient | null = null;
 
 export const getSupabase = (): SupabaseClient => {
   if (_supabase) return _supabase;
 
+  // Access Vite environment variables safely
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -17,10 +60,20 @@ export const getSupabase = (): SupabaseClient => {
 
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error('[DB] Missing Supabase environment variables');
+    // We don't throw immediately to allow the app to render, but actions will fail
+    // However, createClient requires URL, so we must throw or return a dummy if we want to avoid crash
     throw new Error('Game configuration error. Please try again later.');
   }
 
-  _supabase = createClient(supabaseUrl, supabaseAnonKey);
+  _supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      storage: SafeStorage,
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false,
+    },
+  });
+  
   console.log('[DB] Supabase client initialized');
   
   return _supabase;
