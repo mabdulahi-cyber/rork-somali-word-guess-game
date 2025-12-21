@@ -34,12 +34,7 @@ const normalizeUnknownError = (error: unknown): NormalizedDbError => {
   return { message: 'Unknown error' };
 };
 
-const looksLikeMisconfiguredEndpoint = (endpoint: string): boolean => {
-  const lower = endpoint.toLowerCase();
-  if (lower.includes('netlify') || lower.includes('/.netlify/functions')) return true;
-  if (lower.includes('/api') || lower.endsWith('/api')) return true;
-  return false;
-};
+
 
 const preflightHttpEndpoint = async (endpoint: string): Promise<void> => {
   if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://')) return;
@@ -100,12 +95,6 @@ export const getDB = async (): Promise<Surreal> => {
     if (!namespace) missing.push('EXPO_PUBLIC_RORK_DB_NAMESPACE');
     if (!token) missing.push('EXPO_PUBLIC_RORK_DB_TOKEN');
     throw new Error(`[DB] Missing environment variables: ${missing.join(', ')}`);
-  }
-
-  if (looksLikeMisconfiguredEndpoint(endpoint)) {
-    throw new Error(
-      '[DB] EXPO_PUBLIC_RORK_DB_ENDPOINT looks misconfigured (it points to a frontend/API route). It must point to the SurrealDB RPC endpoint (often ends with /rpc).',
-    );
   }
 
   _connectPromise = (async () => {
