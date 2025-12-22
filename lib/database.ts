@@ -1,83 +1,23 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createClient } from '@supabase/supabase-js';
 import type { CardType, Team } from '@/types/game';
 
-// Custom storage adapter to handle corrupted data and ensure safe JSON parsing
-const SafeStorage = {
-  getItem: async (key: string): Promise<string | null> => {
-    try {
-      const value = await AsyncStorage.getItem(key);
-      if (!value) return null;
-      
-      // Check for corrupted "[object Object]" string which causes JSON parse errors
-      if (value.startsWith('[object') || value === 'undefined' || value === 'null') {
-        console.warn('[DB] Found corrupted storage key, removing:', key);
-        await AsyncStorage.removeItem(key);
-        return null;
-      }
-      
-      return value;
-    } catch (error) {
-      console.warn('[DB] SafeStorage getItem error:', error);
-      return null;
-    }
-  },
-  setItem: async (key: string, value: string) => {
-    try {
-      // Prevent writing corrupted values
-      if (value.startsWith('[object')) {
-        console.error('[DB] Attempted to write corrupted value to storage:', key);
-        return;
-      }
-      await AsyncStorage.setItem(key, value);
-    } catch (error) {
-      console.warn('[DB] SafeStorage setItem error:', error);
-    }
-  },
-  removeItem: async (key: string) => {
-    try {
-      await AsyncStorage.removeItem(key);
-    } catch (error) {
-      console.warn('[DB] SafeStorage removeItem error:', error);
-    }
-  },
-};
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-let _supabase: SupabaseClient | null = null;
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('[DB] Missing Supabase environment variables');
+  console.error('[DB] Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Netlify');
+}
 
-export const getSupabase = (): SupabaseClient => {
-  if (_supabase) return _supabase;
-
-  // Access Vite environment variables safely
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-  console.log('[DB] Supabase environment check:', {
-    hasUrl: !!supabaseUrl,
-    hasKey: !!supabaseAnonKey,
-    urlPreview: supabaseUrl ? `${supabaseUrl.slice(0, 40)}...` : null,
-  });
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('[DB] Missing Supabase environment variables');
-    // We don't throw immediately to allow the app to render, but actions will fail
-    // However, createClient requires URL, so we must throw or return a dummy if we want to avoid crash
-    throw new Error('Game configuration error. Please try again later.');
-  }
-
-  _supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(
+  supabaseUrl || '',
+  supabaseAnonKey || '',
+  {
     auth: {
-      storage: SafeStorage,
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: false,
+      persistSession: false,
     },
-  });
-  
-  console.log('[DB] Supabase client initialized');
-  
-  return _supabase;
-};
+  }
+);
 
 interface DBRoom {
   id?: string;
@@ -110,7 +50,9 @@ interface DBPlayer {
 
 export const db = {
   async createRoom(code: string, words: string[], keyMap: CardType[], startingTeam: Team): Promise<DBRoom> {
-    const supabase = getSupabase();
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Game configuration error. Please contact support.');
+    }
     
     const roomData: DBRoom = {
       code,
@@ -139,7 +81,6 @@ export const db = {
   },
 
   async getRoom(code: string): Promise<DBRoom | null> {
-    const supabase = getSupabase();
     
     const { data, error } = await supabase
       .from('rooms')
@@ -159,7 +100,6 @@ export const db = {
   },
 
   async updateRoom(code: string, updates: Partial<DBRoom>): Promise<void> {
-    const supabase = getSupabase();
     
     const { error } = await supabase
       .from('rooms')
@@ -173,7 +113,6 @@ export const db = {
   },
 
   async createPlayer(id: string, roomCode: string, name: string): Promise<DBPlayer> {
-    const supabase = getSupabase();
     
     const playerData: DBPlayer = {
       id,
@@ -199,7 +138,6 @@ export const db = {
   },
 
   async getPlayer(id: string): Promise<DBPlayer | null> {
-    const supabase = getSupabase();
     
     const { data, error } = await supabase
       .from('players')
@@ -219,7 +157,6 @@ export const db = {
   },
 
   async updatePlayer(id: string, updates: Partial<DBPlayer>): Promise<void> {
-    const supabase = getSupabase();
     
     const { error } = await supabase
       .from('players')
@@ -233,7 +170,6 @@ export const db = {
   },
 
   async getPlayersByRoom(roomCode: string): Promise<DBPlayer[]> {
-    const supabase = getSupabase();
     
     const { data, error } = await supabase
       .from('players')
@@ -250,7 +186,6 @@ export const db = {
   },
 
   async deletePlayer(id: string): Promise<void> {
-    const supabase = getSupabase();
     
     const { error } = await supabase
       .from('players')
