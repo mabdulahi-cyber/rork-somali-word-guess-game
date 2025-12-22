@@ -1,12 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import type { CardType, Team } from '@/types/game';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('[DB] Missing Supabase environment variables');
-  console.error('[DB] Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Netlify');
+  console.error('[DB] Please set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in Netlify');
 }
 
 export const supabase = createClient(
