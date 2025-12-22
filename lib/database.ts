@@ -1,29 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import type { CardType, Team } from '@/types/game';
 
-// Safe access to environment variables that works in both Vite and Expo environments
-// The user strictly requested VITE_ variables, but we must ensure it doesn't crash if import.meta is missing
-const getEnvVar = (key: 'VITE_SUPABASE_URL' | 'VITE_SUPABASE_ANON_KEY'): string | undefined => {
-  try {
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env) {
-      // @ts-ignore
-      return import.meta.env[key];
-    }
-  } catch {
-    // Ignore errors accessing import.meta
-  }
-  return undefined;
-};
-
-const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
-const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  // Only log if we are in development to avoid spamming production logs
   if (__DEV__) {
     console.error('[DB] Missing Supabase environment variables');
-    console.error('[DB] Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
+    console.error('[DB] Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY');
   }
 }
 
