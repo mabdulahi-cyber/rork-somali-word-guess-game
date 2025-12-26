@@ -1,11 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import type { CardType, Team } from '@/types/game';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl = import.meta.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('[DB] Missing Supabase environment variables');
+  console.error('[DB] Please set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY');
   throw new Error('Game configuration error. Please try again later.');
 }
 
@@ -50,10 +51,6 @@ interface DBPlayer {
 
 export const db = {
   async createRoom(code: string, words: string[], keyMap: CardType[], startingTeam: Team): Promise<DBRoom> {
-    if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error('Game configuration error. Please contact support.');
-    }
-    
     const roomData: DBRoom = {
       code,
       words,
