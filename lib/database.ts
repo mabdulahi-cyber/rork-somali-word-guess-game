@@ -1,14 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import type { CardType, Team } from '@/types/game';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  if (__DEV__) {
-    console.error('[DB] Missing Supabase environment variables');
-    console.error('[DB] Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY');
-  }
+  console.error('[DB] Missing Supabase environment variables');
+  throw new Error('Game configuration error. Please try again later.');
 }
 
 export const supabase = createClient(
