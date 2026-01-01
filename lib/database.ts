@@ -1,6 +1,8 @@
+import Surreal from 'surrealdb.js';
 import type { CardType, Team } from '@/types/game';
 
 interface DBRoom {
+  [key: string]: unknown;
   id?: string;
   code: string;
   words: string[];
@@ -19,6 +21,7 @@ interface DBRoom {
 }
 
 interface DBPlayer {
+  [key: string]: unknown;
   id: string;
   room_code: string;
   name: string;
@@ -41,15 +44,54 @@ interface DBAdapter {
   deletePlayer: (id: string) => Promise<void>;
 }
 
-const createMemoryAdapter = (): DBAdapter => {
-  const rooms = new Map<string, DBRoom>();
-  const players = new Map<string, DBPlayer>();
+const createSurrealDBAdapter = (): DBAdapter => {
+  let dbInstance: Surreal | null = null;
+  let connectPromise: Promise<void> | null = null;
 
-  const nowIso = () => new Date().toISOString();
+  const getDB = async (): Promise<Surreal> => {
+    if (dbInstance) return dbInstance;
+
+    if (connectPromise) {
+      await connectPromise;
+      return dbInstance!;
+    }
+
+    connectPromise = (async () => {
+      try {
+        const endpoint = process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT;
+        const namespace = process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE;
+        const token = process.env.EXPO_PUBLIC_RORK_DB_TOKEN;
+
+        if (!endpoint || !namespace || !token) {
+          throw new Error('Missing SurrealDB configuration');
+        }
+
+        console.log('[DB:surreal] Connecting to SurrealDB...', { endpoint });
+
+        dbInstance = new Surreal();
+        await dbInstance.connect(endpoint, {
+          namespace,
+          database: 'somali_codenames',
+          auth: { token },
+        });
+
+        console.log('[DB:surreal] Connected successfully');
+      } catch (error) {
+        console.error('[DB:surreal] Connection failed:', error);
+        dbInstance = null;
+        connectPromise = null;
+        throw error;
+      }
+    })();
+
+    await connectPromise;
+    return dbInstance!;
+  };
 
   const adapter: DBAdapter = {
     async createRoom(code, words, keyMap, startingTeam) {
-      const roomData: DBRoom = {
+      const db = await getDB();
+      const roomData = {
         code,
         words,
         key_map: keyMap,
@@ -59,97 +101,79 @@ const createMemoryAdapter = (): DBAdapter => {
         game_status: 'PLAYING',
         guesses_left: 0,
         version: 1,
-        created_at: nowIso(),
-        updated_at: nowIso(),
       };
 
-      rooms.set(code, roomData);
-      console.log('[DB:memory] createRoom', { code });
-      return roomData;
+      const result = await db.create(`rooms:${code}`, roomData);
+      const created = Array.isArray(result) ? result[0] : result;
+      console.log('[DB:surreal] createRoom', { code });
+      return created as unknown as DBRoom;
     },
 
     async getRoom(code) {
-      const room = rooms.get(code) ?? null;
-      console.log('[DB:memory] getRoom', { code, found: Boolean(room) });
-      return room;
+      const db = await getDB();
+      const result = await db.select<DBRoom>(`rooms:${code}`);
+      const room = Array.isArray(result) ? result[0] : result;
+      console.log('[DB:surreal] getRoom', { code, found: Boolean(room) });
+      return room || null;
     },
 
     async updateRoom(code, updates) {
-      const existing = rooms.get(code);
-      if (!existing) {
-        console.warn('[DB:memory] updateRoom attempted on missing room', { code });
-        return;
-      }
-
-      const merged: DBRoom = {
-        ...existing,
-        ...updates,
-        updated_at: nowIso(),
-      };
-
-      rooms.set(code, merged);
-      console.log('[DB:memory] updateRoom', { code, keys: Object.keys(updates) });
+      const db = await getDB();
+      await db.merge(`rooms:${code}`, updates);
+      console.log('[DB:surreal] updateRoom', { code, keys: Object.keys(updates) });
     },
 
     async createPlayer(id, roomCode, name) {
-      const playerData: DBPlayer = {
+      const db = await getDB();
+      const playerData = {
         id,
         room_code: roomCode,
         name,
         team: null,
-        role: 'guesser',
+        role: 'guesser' as const,
         is_active: true,
-        created_at: nowIso(),
-        updated_at: nowIso(),
       };
 
-      players.set(id, playerData);
-      console.log('[DB:memory] createPlayer', { id, roomCode });
-      return playerData;
+      const result = await db.create(`players:${id}`, playerData);
+      const created = Array.isArray(result) ? result[0] : result;
+      console.log('[DB:surreal] createPlayer', { id, roomCode });
+      return created as unknown as DBPlayer;
     },
 
     async getPlayer(id) {
-      const player = players.get(id) ?? null;
-      console.log('[DB:memory] getPlayer', { id, found: Boolean(player) });
-      return player;
+      const db = await getDB();
+      const result = await db.select<DBPlayer>(`players:${id}`);
+      const player = Array.isArray(result) ? result[0] : result;
+      console.log('[DB:surreal] getPlayer', { id, found: Boolean(player) });
+      return player || null;
     },
 
     async updatePlayer(id, updates) {
-      const existing = players.get(id);
-      if (!existing) {
-        console.warn('[DB:memory] updatePlayer attempted on missing player', { id });
-        return;
-      }
-
-      const merged: DBPlayer = {
-        ...existing,
-        ...updates,
-        updated_at: nowIso(),
-      };
-
-      players.set(id, merged);
-      console.log('[DB:memory] updatePlayer', { id, keys: Object.keys(updates) });
+      const db = await getDB();
+      await db.merge(`players:${id}`, updates);
+      console.log('[DB:surreal] updatePlayer', { id, keys: Object.keys(updates) });
     },
 
     async getPlayersByRoom(roomCode) {
-      const list = Array.from(players.values()).filter(
-        (p) => p.room_code === roomCode && p.is_active === true,
-      );
-      console.log('[DB:memory] getPlayersByRoom', { roomCode, count: list.length });
-      return list;
+      const db = await getDB();
+      const query = `SELECT * FROM players WHERE room_code = $roomCode AND is_active = true`;
+      const result = await db.query<[DBPlayer[]]>(query, { roomCode });
+      const players = result?.[0] || [];
+      console.log('[DB:surreal] getPlayersByRoom', { roomCode, count: players.length });
+      return players;
     },
 
     async deletePlayer(id) {
-      players.delete(id);
-      console.log('[DB:memory] deletePlayer', { id });
+      const db = await getDB();
+      await db.delete(`players:${id}`);
+      console.log('[DB:surreal] deletePlayer', { id });
     },
   };
 
   return adapter;
 };
 
-// Use in-memory adapter for reliable local gameplay
-const adapter: DBAdapter = createMemoryAdapter();
+const adapter: DBAdapter = createSurrealDBAdapter();
 
 export const db: DBAdapter = adapter;
 export type { DBRoom, DBPlayer };
