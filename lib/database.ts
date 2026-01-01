@@ -1,4 +1,3 @@
-import Surreal from 'surrealdb.js';
 import type { CardType, Team } from '@/types/game';
 
 interface DBRoom {
@@ -41,36 +40,6 @@ interface DBAdapter {
   getPlayersByRoom: (roomCode: string) => Promise<DBPlayer[]>;
   deletePlayer: (id: string) => Promise<void>;
 }
-
-type DbConfig = {
-  endpoint: string;
-  namespace: string;
-  token: string;
-};
-
-const getProcessEnv = (): Record<string, string | undefined> => {
-  const proc = typeof process !== 'undefined' ? (process as any) : undefined;
-  const env = proc?.env;
-  if (env && typeof env === 'object') return env as Record<string, string | undefined>;
-  return {};
-};
-
-const getDbConfig = (): DbConfig | null => {
-  const env = getProcessEnv();
-  const endpoint = env.EXPO_PUBLIC_RORK_DB_ENDPOINT;
-  const namespace = env.EXPO_PUBLIC_RORK_DB_NAMESPACE;
-  const token = env.EXPO_PUBLIC_RORK_DB_TOKEN;
-
-  if (!endpoint || !namespace || !token) {
-    console.warn('[DB] Missing Rork database environment variables; falling back to in-memory DB.');
-    console.warn('[DB] endpoint present:', Boolean(endpoint));
-    console.warn('[DB] namespace present:', Boolean(namespace));
-    console.warn('[DB] token present:', Boolean(token));
-    return null;
-  }
-
-  return { endpoint, namespace, token };
-};
 
 const createMemoryAdapter = (): DBAdapter => {
   const rooms = new Map<string, DBRoom>();
@@ -179,145 +148,8 @@ const createMemoryAdapter = (): DBAdapter => {
   return adapter;
 };
 
-const createSurrealAdapter = (config: DbConfig): DBAdapter => {
-  let dbInstance: Surreal | null = null;
-
-  const getDb = async (): Promise<Surreal> => {
-    if (dbInstance) return dbInstance;
-
-    console.log('[DB:surreal] Connecting to SurrealDB...');
-
-    const db = new Surreal();
-    await db.connect(config.endpoint);
-    await db.authenticate(config.token);
-    await db.use({ namespace: config.namespace, database: 'somali-codenames' });
-
-    dbInstance = db;
-    console.log('[DB:surreal] Connected');
-    return db;
-  };
-
-  const adapter: DBAdapter = {
-    async createRoom(code, words, keyMap, startingTeam) {
-      const roomData: DBRoom = {
-        code,
-        words,
-        key_map: keyMap,
-        revealed: Array(25).fill(false),
-        turn_team: startingTeam,
-        turn_status: 'WAITING_HINT',
-        game_status: 'PLAYING',
-        guesses_left: 0,
-        version: 1,
-      };
-
-      try {
-        const db = await getDb();
-        const query = `CREATE rooms:${code} CONTENT $data`;
-        const result = await db.query(query, { data: roomData });
-        return ((result?.[0] as DBRoom[])?.[0] || (result?.[0] as DBRoom)) as DBRoom;
-      } catch (error) {
-        console.error('[DB:surreal] createRoom error:', error);
-        throw error;
-      }
-    },
-
-    async getRoom(code) {
-      try {
-        const db = await getDb();
-        const result = (await db.select(`rooms:${code}`)) as unknown as DBRoom;
-        return result || null;
-      } catch (error) {
-        console.error('[DB:surreal] getRoom error:', error);
-        return null;
-      }
-    },
-
-    async updateRoom(code, updates) {
-      try {
-        const db = await getDb();
-        await db.merge(`rooms:${code}`, updates);
-      } catch (error) {
-        console.error('[DB:surreal] updateRoom error:', error);
-        throw error;
-      }
-    },
-
-    async createPlayer(id, roomCode, name) {
-      const playerData: DBPlayer = {
-        id,
-        room_code: roomCode,
-        name,
-        team: null,
-        role: 'guesser',
-        is_active: true,
-      };
-
-      try {
-        const db = await getDb();
-        const query = `CREATE players:${id} CONTENT $data`;
-        const result = await db.query(query, { data: playerData });
-        return ((result?.[0] as DBPlayer[])?.[0] || (result?.[0] as DBPlayer)) as DBPlayer;
-      } catch (error) {
-        console.error('[DB:surreal] createPlayer error:', error);
-        throw error;
-      }
-    },
-
-    async getPlayer(id) {
-      try {
-        const db = await getDb();
-        const result = (await db.select(`players:${id}`)) as unknown as DBPlayer;
-        return result || null;
-      } catch (error) {
-        console.error('[DB:surreal] getPlayer error:', error);
-        return null;
-      }
-    },
-
-    async updatePlayer(id, updates) {
-      try {
-        const db = await getDb();
-        await db.merge(`players:${id}`, updates);
-      } catch (error) {
-        console.error('[DB:surreal] updatePlayer error:', error);
-        throw error;
-      }
-    },
-
-    async getPlayersByRoom(roomCode) {
-      try {
-        const db = await getDb();
-        const result = await db.query(
-          'SELECT * FROM players WHERE room_code = $roomCode AND is_active = true',
-          { roomCode },
-        );
-        return ((result?.[0] as DBPlayer[]) || []) as DBPlayer[];
-      } catch (error) {
-        console.error('[DB:surreal] getPlayersByRoom error:', error);
-        return [];
-      }
-    },
-
-    async deletePlayer(id) {
-      try {
-        const db = await getDb();
-        await db.delete(`players:${id}`);
-      } catch (error) {
-        console.error('[DB:surreal] deletePlayer error:', error);
-        throw error;
-      }
-    },
-  };
-
-  return adapter;
-};
-
-const adapter: DBAdapter = (() => {
-  const config = getDbConfig();
-  if (config) return createSurrealAdapter(config);
-  return createMemoryAdapter();
-})();
+// Use in-memory adapter for reliable local gameplay
+const adapter: DBAdapter = createMemoryAdapter();
 
 export const db: DBAdapter = adapter;
 export type { DBRoom, DBPlayer };
