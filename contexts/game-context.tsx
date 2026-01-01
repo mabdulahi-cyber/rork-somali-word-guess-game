@@ -450,7 +450,8 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
     });
 
     console.log('[GameContext] revealCard - room updated successfully');
-  }, [roomCode, playerId, roomState]);
+    await fetchSnapshot(roomCode);
+  }, [roomCode, playerId, roomState, fetchSnapshot]);
 
   const sendHint = useCallback(async (word: string, number: number) => {
     if (!roomCode) return;
@@ -461,7 +462,8 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
         turn_status: 'GUESSING',
         guesses_left: number + 1
     });
-  }, [roomCode]);
+    await fetchSnapshot(roomCode);
+  }, [roomCode, fetchSnapshot]);
 
   const endTurn = useCallback(async () => {
     if (!roomCode || !roomState) return;
@@ -475,7 +477,8 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
         hint_word: undefined,
         hint_number: undefined
     });
-  }, [roomCode, roomState]);
+    await fetchSnapshot(roomCode);
+  }, [roomCode, roomState, fetchSnapshot]);
 
   const resetGame = useCallback(async () => {
     if (!roomCode) return;
@@ -497,7 +500,8 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
         guesses_left: 0,
         version: (roomState?.version || 0) + 1
     });
-  }, [roomCode, roomState]);
+    await fetchSnapshot(roomCode);
+  }, [roomCode, roomState, fetchSnapshot]);
 
   const toggleMic = useCallback(async () => {
     // Not implemented for now, just local state?

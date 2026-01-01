@@ -151,7 +151,6 @@ export default function GameScreen() {
     selectTeam,
     isRoomLoading,
     isInitializing,
-    refetchRoom,
   } = useGame();
 
   const [hintWord, setHintWord] = useState<string>('');
@@ -222,7 +221,6 @@ export default function GameScreen() {
     }
     try {
       await revealCard(cardId);
-      await refetchRoom();
     } catch (error) {
       console.warn('Failed to reveal card', error);
     }
@@ -481,16 +479,18 @@ export default function GameScreen() {
         ) : null}
 
         {roomState && (
-          <PlayersPanel
-            players={roomState.players}
-            currentPlayerId={currentPlayer?.id || ''}
-            onSwitchTeam={handleSwitchTeam}
-            onChangeRole={handleChangeRole}
-          />
+          <View pointerEvents="box-none">
+            <PlayersPanel
+              players={roomState.players}
+              currentPlayerId={currentPlayer?.id || ''}
+              onSwitchTeam={handleSwitchTeam}
+              onChangeRole={handleChangeRole}
+            />
+          </View>
         )}
       </LinearGradient>
 
-      <View style={styles.gameBoard}>
+      <View style={styles.gameBoard} pointerEvents="box-none">
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={[
@@ -500,6 +500,7 @@ export default function GameScreen() {
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          pointerEvents="auto"
         >
           <View style={[styles.gridContainer, { width: boardWidth }]}>
             {roomState.cards.map((card) => (
