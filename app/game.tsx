@@ -479,18 +479,16 @@ export default function GameScreen() {
         ) : null}
 
         {roomState && (
-          <View pointerEvents="box-none">
-            <PlayersPanel
-              players={roomState.players}
-              currentPlayerId={currentPlayer?.id || ''}
-              onSwitchTeam={handleSwitchTeam}
-              onChangeRole={handleChangeRole}
-            />
-          </View>
+          <PlayersPanel
+            players={roomState.players}
+            currentPlayerId={currentPlayer?.id || ''}
+            onSwitchTeam={handleSwitchTeam}
+            onChangeRole={handleChangeRole}
+          />
         )}
       </LinearGradient>
 
-      <View style={styles.gameBoard} pointerEvents="box-none">
+      <View style={styles.gameBoard}>
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={[
@@ -500,7 +498,6 @@ export default function GameScreen() {
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          pointerEvents="auto"
         >
           <View style={[styles.gridContainer, { width: boardWidth }]}>
             {roomState.cards.map((card) => (
@@ -536,11 +533,10 @@ export default function GameScreen() {
       </View>
 
       {!roomState.winner && (
-        <View style={styles.scrumMasterPanel}>
-          <LinearGradient
-            colors={['rgba(26, 26, 46, 0.98)', 'rgba(22, 33, 62, 0.98)']}
-            style={styles.panelGradient}
-          >
+        <LinearGradient
+          colors={['rgba(26, 26, 46, 0.98)', 'rgba(22, 33, 62, 0.98)']}
+          style={styles.scrumMasterPanel}
+        >
             <Text style={styles.panelTitle}>Spymaster</Text>
             {hintError ? <Text style={styles.errorText}>{hintError}</Text> : null}
             {isSpymaster && roomState.turn.status === 'WAITING_HINT' && roomState.turn.turnTeam === currentPlayer?.team ? (
@@ -611,8 +607,7 @@ export default function GameScreen() {
             ) : (
               <Text style={styles.helperText}>Only the Spymaster can send hints.</Text>
             )}
-          </LinearGradient>
-        </View>
+        </LinearGradient>
       )}
 
         {renderWinnerModal()}
@@ -985,13 +980,9 @@ const styles = StyleSheet.create({
   scrumMasterPanel: {
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
-    pointerEvents: 'box-none',
-  },
-  panelGradient: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     paddingBottom: Platform.OS === 'ios' ? 24 : 12,
-    pointerEvents: 'auto',
   },
   panelTitle: {
     fontSize: 12,
