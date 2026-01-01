@@ -361,12 +361,20 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
   const revealCard = useCallback(async (cardId: string) => {
     if (!roomCode || !playerId || !roomState) return;
 
+    console.log('[GameContext] revealCard called', { cardId, roomCode });
+
     const index = parseInt(cardId.split('-')[1]);
     
     const room = await db.getRoom(roomCode);
-    if (!room) return;
+    if (!room) {
+      console.warn('[GameContext] revealCard - room not found');
+      return;
+    }
 
-    if (room.revealed[index]) return; // Already revealed
+    if (room.revealed[index]) {
+      console.log('[GameContext] revealCard - card already revealed');
+      return;
+    }
 
     const newRevealed = [...room.revealed];
     newRevealed[index] = true;
@@ -378,32 +386,30 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
     let gameStatus = room.game_status;
     let winner = room.winner_team;
 
-    // Logic for turn end
-    let endTurn = false;
+    console.log('[GameContext] Card revealed', { cardType, currentTeam: turnTeam });
+
+    let shouldEndTurn = false;
     
     if (cardType === 'assassin') {
+        console.log('[GameContext] Assassin revealed - game over');
         gameStatus = 'ENDED';
-        winner = turnTeam === 'red' ? 'blue' : 'red'; // Note: Winner is the OTHER team?
-        // Wait, assassin kills you, so other team wins.
-        // If I am red and I pick assassin, Blue wins.
-        // We can store 'assassinated' in winner or just store the winning team.
-        // roomState expects winner: Team | 'assassinated'
-        // Let's store 'assassinated' logic in client or backend?
-        // Let's store the actual winning team in DB.
+        winner = turnTeam === 'red' ? 'blue' : 'red';
     } else if (cardType === 'neutral') {
-        endTurn = true;
+        console.log('[GameContext] Neutral card - ending turn');
+        shouldEndTurn = true;
     } else if (cardType !== turnTeam) {
-        endTurn = true;
+        console.log('[GameContext] Wrong team card - ending turn');
+        shouldEndTurn = true;
     } else {
-        // Correct guess
-        guessesLeft -= 1;
+        console.log('[GameContext] Correct guess');
+        if (guessesLeft > 0) {
+          guessesLeft -= 1;
+        }
         if (guessesLeft === 0) {
-            endTurn = true;
+            shouldEndTurn = true;
         }
     }
 
-    // Check win condition (all cards of a team revealed)
-    // We need to count revealed cards of each color
     const totalRed = room.key_map.filter((t: string) => t === 'red').length;
     const totalBlue = room.key_map.filter((t: string) => t === 'blue').length;
     
@@ -417,20 +423,21 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
     
     if (gameStatus !== 'ENDED') {
         if (revealedRed === totalRed) {
+            console.log('[GameContext] Red team wins - all cards revealed');
             gameStatus = 'ENDED';
             winner = 'red';
         } else if (revealedBlue === totalBlue) {
+            console.log('[GameContext] Blue team wins - all cards revealed');
             gameStatus = 'ENDED';
             winner = 'blue';
         }
     }
 
-    if (endTurn && gameStatus !== 'ENDED') {
+    if (shouldEndTurn && gameStatus !== 'ENDED') {
+        console.log('[GameContext] Switching turn to other team');
         turnTeam = turnTeam === 'red' ? 'blue' : 'red';
         turnStatus = 'WAITING_HINT';
         guessesLeft = 0;
-        // Reset hint
-        // In DB we can keep hint_word but maybe clear it for next turn
     }
 
     await db.updateRoom(roomCode, {
@@ -442,6 +449,7 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
         winner_team: winner
     });
 
+    console.log('[GameContext] revealCard - room updated successfully');
   }, [roomCode, playerId, roomState]);
 
   const sendHint = useCallback(async (word: string, number: number) => {

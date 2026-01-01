@@ -151,6 +151,7 @@ export default function GameScreen() {
     selectTeam,
     isRoomLoading,
     isInitializing,
+    refetchRoom,
   } = useGame();
 
   const [hintWord, setHintWord] = useState<string>('');
@@ -203,7 +204,6 @@ export default function GameScreen() {
     return (
       currentPlayer.role === 'guesser' &&
       currentPlayer.team === roomState.turn.turnTeam &&
-      roomState.turn.status === 'GUESSING' &&
       !roomState.winner
     );
   }, [currentPlayer, roomState]);
@@ -217,10 +217,12 @@ export default function GameScreen() {
     console.log('[Game] Card pressed:', cardId, { canGuess, role: currentPlayer?.role, team: currentPlayer?.team });
 
     if (!canGuess) {
+      console.log('[Game] Cannot guess - conditions not met');
       return;
     }
     try {
       await revealCard(cardId);
+      await refetchRoom();
     } catch (error) {
       console.warn('Failed to reveal card', error);
     }
@@ -286,7 +288,6 @@ export default function GameScreen() {
     return (
       currentPlayer.role === 'guesser' &&
       currentPlayer.team === roomState.turn.turnTeam &&
-      roomState.turn.status === 'GUESSING' &&
       !roomState.winner
     );
   }, [currentPlayer, roomState]);
@@ -506,7 +507,7 @@ export default function GameScreen() {
                 key={card.id}
                 card={card}
                 onPress={() => handleCardPress(card.id)}
-                disabled={card.revealed}
+                disabled={card.revealed || !canGuess}
                 cardSize={cardSize}
                 isSpymaster={isSpymaster}
               />
@@ -940,6 +941,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 1000,
   },
   modalContent: {
     backgroundColor: '#ffffff',
@@ -982,11 +984,13 @@ const styles = StyleSheet.create({
   scrumMasterPanel: {
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    pointerEvents: 'box-none',
   },
   panelGradient: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+    pointerEvents: 'auto',
   },
   panelTitle: {
     fontSize: 12,
