@@ -1,4 +1,3 @@
-import Surreal from 'surrealdb.js';
 import type { CardType, Team } from '@/types/game';
 
 interface DBRoom {
@@ -44,55 +43,55 @@ interface DBAdapter {
   deletePlayer: (id: string) => Promise<void>;
 }
 
-const createSurrealDBAdapter = (): DBAdapter => {
-  let dbInstance: Surreal | null = null;
-  let connectPromise: Promise<void> | null = null;
+const createRestDBAdapter = (): DBAdapter => {
+  const getConfig = () => {
+    const endpoint = process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT;
+    const namespace = process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE;
+    const token = process.env.EXPO_PUBLIC_RORK_DB_TOKEN;
 
-  const getDB = async (): Promise<Surreal> => {
-    if (dbInstance) return dbInstance;
-
-    if (connectPromise) {
-      await connectPromise;
-      return dbInstance!;
+    if (!endpoint || !namespace || !token) {
+      throw new Error('Missing database configuration');
     }
 
-    connectPromise = (async () => {
-      try {
-        const endpoint = process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT;
-        const namespace = process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE;
-        const token = process.env.EXPO_PUBLIC_RORK_DB_TOKEN;
+    return { endpoint, namespace, token };
+  };
 
-        if (!endpoint || !namespace || !token) {
-          throw new Error('Missing SurrealDB configuration');
+  const makeRequest = async (method: string, path: string, body?: unknown): Promise<unknown> => {
+    const { endpoint, namespace, token } = getConfig();
+    const url = `${endpoint}/${namespace}/${path}`;
+    
+    console.log(`[DB:rest] ${method} ${path}`);
+    
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[DB:rest] Error ${response.status}:`, errorText);
+        if (response.status === 404) {
+          return null;
         }
-
-        const rpcEndpoint = endpoint.endsWith('/rpc') ? endpoint : `${endpoint}/rpc`;
-        console.log('[DB:surreal] Connecting to SurrealDB...', { endpoint: rpcEndpoint });
-
-        dbInstance = new Surreal();
-        await dbInstance.connect(rpcEndpoint, {
-          namespace,
-          database: 'somali_codenames',
-          auth: { token },
-        });
-
-        console.log('[DB:surreal] Connected successfully');
-      } catch (error) {
-        console.error('[DB:surreal] Connection failed:', error);
-        dbInstance = null;
-        connectPromise = null;
-        throw error;
+        throw new Error(`Database request failed: ${response.status} ${errorText}`);
       }
-    })();
 
-    await connectPromise;
-    return dbInstance!;
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error(`[DB:rest] Request failed:`, error);
+      throw error;
+    }
   };
 
   const adapter: DBAdapter = {
     async createRoom(code, words, keyMap, startingTeam) {
-      const db = await getDB();
-      const roomData = {
+      const roomData: DBRoom = {
         code,
         words,
         key_map: keyMap,
@@ -102,79 +101,84 @@ const createSurrealDBAdapter = (): DBAdapter => {
         game_status: 'PLAYING',
         guesses_left: 0,
         version: 1,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
 
-      const result = await db.create(`rooms:${code}`, roomData);
-      const created = Array.isArray(result) ? result[0] : result;
-      console.log('[DB:surreal] createRoom', { code });
-      return created as unknown as DBRoom;
+      const result = await makeRequest('POST', `rooms/${code}`, roomData);
+      console.log('[DB:rest] createRoom', { code });
+      return (result as DBRoom) || roomData;
     },
 
     async getRoom(code) {
-      const db = await getDB();
-      const result = await db.select<DBRoom>(`rooms:${code}`);
-      const room = Array.isArray(result) ? result[0] : result;
-      console.log('[DB:surreal] getRoom', { code, found: Boolean(room) });
-      return room || null;
+      const result = await makeRequest('GET', `rooms/${code}`);
+      console.log('[DB:rest] getRoom', { code, found: Boolean(result) });
+      return result as DBRoom | null;
     },
 
     async updateRoom(code, updates) {
-      const db = await getDB();
-      await db.merge(`rooms:${code}`, updates);
-      console.log('[DB:surreal] updateRoom', { code, keys: Object.keys(updates) });
+      const updatedData = {
+        ...updates,
+        updated_at: new Date().toISOString(),
+      };
+      await makeRequest('PATCH', `rooms/${code}`, updatedData);
+      console.log('[DB:rest] updateRoom', { code, keys: Object.keys(updates) });
     },
 
     async createPlayer(id, roomCode, name) {
-      const db = await getDB();
-      const playerData = {
+      const playerData: DBPlayer = {
         id,
         room_code: roomCode,
         name,
         team: null,
-        role: 'guesser' as const,
+        role: 'guesser',
         is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
 
-      const result = await db.create(`players:${id}`, playerData);
-      const created = Array.isArray(result) ? result[0] : result;
-      console.log('[DB:surreal] createPlayer', { id, roomCode });
-      return created as unknown as DBPlayer;
+      const result = await makeRequest('POST', `players/${id}`, playerData);
+      console.log('[DB:rest] createPlayer', { id, roomCode });
+      return (result as DBPlayer) || playerData;
     },
 
     async getPlayer(id) {
-      const db = await getDB();
-      const result = await db.select<DBPlayer>(`players:${id}`);
-      const player = Array.isArray(result) ? result[0] : result;
-      console.log('[DB:surreal] getPlayer', { id, found: Boolean(player) });
-      return player || null;
+      const result = await makeRequest('GET', `players/${id}`);
+      console.log('[DB:rest] getPlayer', { id, found: Boolean(result) });
+      return result as DBPlayer | null;
     },
 
     async updatePlayer(id, updates) {
-      const db = await getDB();
-      await db.merge(`players:${id}`, updates);
-      console.log('[DB:surreal] updatePlayer', { id, keys: Object.keys(updates) });
+      const updatedData = {
+        ...updates,
+        updated_at: new Date().toISOString(),
+      };
+      await makeRequest('PATCH', `players/${id}`, updatedData);
+      console.log('[DB:rest] updatePlayer', { id, keys: Object.keys(updates) });
     },
 
     async getPlayersByRoom(roomCode) {
-      const db = await getDB();
-      const query = `SELECT * FROM players WHERE room_code = $roomCode AND is_active = true`;
-      const result = await db.query<[DBPlayer[]]>(query, { roomCode });
-      const players = result?.[0] || [];
-      console.log('[DB:surreal] getPlayersByRoom', { roomCode, count: players.length });
-      return players;
+      try {
+        const result = await makeRequest('GET', `players?room_code=${encodeURIComponent(roomCode)}&is_active=true`);
+        const players = Array.isArray(result) ? result : [];
+        console.log('[DB:rest] getPlayersByRoom', { roomCode, count: players.length });
+        return players as DBPlayer[];
+      } catch (error) {
+        console.error('[DB:rest] getPlayersByRoom error:', error);
+        return [];
+      }
     },
 
     async deletePlayer(id) {
-      const db = await getDB();
-      await db.delete(`players:${id}`);
-      console.log('[DB:surreal] deletePlayer', { id });
+      await makeRequest('DELETE', `players/${id}`);
+      console.log('[DB:rest] deletePlayer', { id });
     },
   };
 
   return adapter;
 };
 
-const adapter: DBAdapter = createSurrealDBAdapter();
+const adapter: DBAdapter = createRestDBAdapter();
 
 export const db: DBAdapter = adapter;
 export type { DBRoom, DBPlayer };
