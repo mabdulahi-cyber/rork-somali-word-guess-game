@@ -1,9 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import createContextHook from "@nkzw/create-context-hook";
+import { useCallback, useEffect, useMemo, useState, createContext, useContext } from "react";
+import type { FunctionComponent, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { db } from "@/lib/database";
 import type { Player, Role, RoomState, Team, Card, CardType } from "@/types/game";
 import { SOMALI_WORDS } from "@/constants/somali-words";
+
+function createContextHook<T>(
+  contextInitializer: () => T,
+  defaultValue?: T,
+): [Context: FunctionComponent<{ children: ReactNode }>, useHook: () => T] {
+  const Context = createContext<T | undefined>(defaultValue);
+
+  return [
+    ({ children }: { children: ReactNode }) => (
+      <Context.Provider value={contextInitializer()}>
+        {children}
+      </Context.Provider>
+    ),
+    () => useContext(Context) as T,
+  ];
+}
 
 interface GameContextValue {
   playerId: string;
