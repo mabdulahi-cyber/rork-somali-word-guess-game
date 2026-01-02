@@ -2,7 +2,12 @@ import { Handler } from '@netlify/functions';
 import app from '../../backend/hono';
 
 export const handler: Handler = async (event, context) => {
-  const path = event.path.replace('/.netlify/functions/api', '') || '/';
+  let path = event.path.replace('/.netlify/functions/api', '') || '/';
+  
+  if (!path.startsWith('/api')) {
+    path = '/api' + path;
+  }
+  
   const url = new URL(path, `https://${event.headers.host}`);
   
   if (event.queryStringParameters) {
