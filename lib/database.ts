@@ -44,22 +44,15 @@ interface DBAdapter {
 }
 
 const createRestDBAdapter = (): DBAdapter => {
-  const getConfig = () => {
-    const endpoint = process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT;
-    const namespace = process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE;
-    const token = process.env.EXPO_PUBLIC_RORK_DB_TOKEN;
-
-    if (!endpoint || !namespace || !token) {
-      throw new Error('Missing database configuration');
-    }
-
-    return { endpoint, namespace, token };
-  };
 
   const makeRequest = async (method: string, table: string, id?: string, body?: unknown, query?: string): Promise<unknown> => {
-    const { endpoint, namespace, token } = getConfig();
+    const apiBaseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
     
-    let url = `${endpoint}/tables/${table}`;
+    if (!apiBaseUrl) {
+      throw new Error('Missing EXPO_PUBLIC_RORK_API_BASE_URL');
+    }
+    
+    let url = `${apiBaseUrl}/api/tables/${table}`;
     if (id) url += `/${id}`;
     if (query) url += `?${query}`;
     
@@ -70,8 +63,6 @@ const createRestDBAdapter = (): DBAdapter => {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Namespace': namespace,
         },
         body: body ? JSON.stringify(body) : undefined,
       });
