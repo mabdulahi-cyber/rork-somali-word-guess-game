@@ -66,10 +66,11 @@ const createSurrealDBAdapter = (): DBAdapter => {
           throw new Error('Missing SurrealDB configuration');
         }
 
-        console.log('[DB:surreal] Connecting to SurrealDB...', { endpoint });
+        const rpcEndpoint = endpoint.endsWith('/rpc') ? endpoint : `${endpoint}/rpc`;
+        console.log('[DB:surreal] Connecting to SurrealDB...', { endpoint: rpcEndpoint });
 
         dbInstance = new Surreal();
-        await dbInstance.connect(endpoint, {
+        await dbInstance.connect(rpcEndpoint, {
           namespace,
           database: 'somali_codenames',
           auth: { token },
