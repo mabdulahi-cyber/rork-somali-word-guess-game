@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -368,7 +369,12 @@ export default function LobbyScreen() {
         </View>
       ) : null}
 
-      {roomState ? (
+      {isRoomLoading && !roomState ? (
+        <View style={styles.loadingCard}>
+          <ActivityIndicator size="large" color="#ffd369" />
+          <Text style={styles.loadingText}>Loading room data...</Text>
+        </View>
+      ) : roomState ? (
         <View style={styles.formCard}>
           <Text style={styles.cardTitle}>Prepare Your Team</Text>
           <Text style={styles.cardDescription}>Choose your team (role optional).</Text>
@@ -433,6 +439,11 @@ export default function LobbyScreen() {
           ) : null}
 
           {renderPlayerList()}
+        </View>
+      ) : !isRoomLoading && roomCode ? (
+        <View style={styles.loadingCard}>
+          <ActivityIndicator size="large" color="#ffd369" />
+          <Text style={styles.loadingText}>Connecting to room...</Text>
         </View>
       ) : null}
     </ScrollView>
@@ -728,5 +739,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#16213e',
+  },
+  loadingCard: {
+    backgroundColor: 'rgba(15, 30, 60, 0.85)',
+    borderRadius: 24,
+    padding: 40,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 211, 105, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    color: '#c0c4d6',
+    fontSize: 16,
   },
 });
