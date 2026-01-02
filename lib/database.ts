@@ -48,8 +48,16 @@ const createRestDBAdapter = (): DBAdapter => {
   const makeRequest = async (method: string, table: string, id?: string, body?: unknown, query?: string): Promise<unknown> => {
     const apiBaseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
     
+    console.log('[DB:rest] Environment check:', {
+      apiBaseUrl,
+      hasEndpoint: !!process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT,
+      hasNamespace: !!process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE,
+      hasToken: !!process.env.EXPO_PUBLIC_RORK_DB_TOKEN,
+    });
+    
     if (!apiBaseUrl) {
-      throw new Error('Missing EXPO_PUBLIC_RORK_API_BASE_URL');
+      console.error('[DB:rest] Missing EXPO_PUBLIC_RORK_API_BASE_URL');
+      throw new Error('Missing EXPO_PUBLIC_RORK_API_BASE_URL environment variable');
     }
     
     let url = `${apiBaseUrl}/api/tables/${table}`;
@@ -57,6 +65,7 @@ const createRestDBAdapter = (): DBAdapter => {
     if (query) url += `?${query}`;
     
     console.log(`[DB:rest] ${method} ${url}`);
+    console.log('[DB:rest] Request body:', body ? JSON.stringify(body).substring(0, 200) : 'none');
     
     try {
       const response = await fetch(url, {
@@ -67,19 +76,25 @@ const createRestDBAdapter = (): DBAdapter => {
         body: body ? JSON.stringify(body) : undefined,
       });
 
+      console.log(`[DB:rest] Response status: ${response.status}`);
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`[DB:rest] Error ${response.status}:`, errorText);
         if (response.status === 404) {
-          return null;
+          if (method === 'GET') {
+            return null;
+          }
+          throw new Error(`Resource not found: ${url}`);
         }
         throw new Error(`Database request failed: ${response.status} ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('[DB:rest] Response data:', JSON.stringify(data).substring(0, 200));
       return data;
     } catch (error) {
-      console.error(`[DB:rest] Request failed:`, error);
+      console.error(`[DB:rest] Request failed for ${method} ${url}:`, error);
       throw error;
     }
   };

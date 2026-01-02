@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Sparkles, Users, Shield, Mic, MicOff, Copy, ArrowLeft } from 'lucide-react-native';
+import { Sparkles, Users, Shield, Mic, MicOff, Copy, ArrowLeft, Settings } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useGame } from '@/contexts/game-context';
 import type { Team } from '@/types/game';
@@ -142,10 +142,17 @@ export default function LobbyScreen() {
   }, [currentPlayer, roomState]);
 
   const handleEnterGame = () => {
-    if (!canEnterGame) return;
-    if (roomCode) {
-        router.push({ pathname: '/room/[code]', params: { code: roomCode } });
+    if (!canEnterGame) {
+      console.log('[LobbyScreen] Cannot enter game - conditions not met');
+      return;
     }
+    if (!roomCode) {
+      console.log('[LobbyScreen] Cannot enter game - no room code');
+      setErrorMessage('No room code available');
+      return;
+    }
+    console.log('[LobbyScreen] Entering game with room code:', roomCode);
+    router.push({ pathname: '/room/[code]', params: { code: roomCode } });
   };
 
   const renderPlayerList = () => {
@@ -204,6 +211,14 @@ export default function LobbyScreen() {
 
   const renderInitialScreen = () => (
     <View style={styles.content}>
+      <Pressable
+        onPress={() => router.push('/debug')}
+        style={styles.debugButton}
+      >
+        <Settings size={20} color="#ffd369" />
+        <Text style={styles.debugButtonText}>Debug</Text>
+      </Pressable>
+
       <View style={styles.headerContainer}>
         <Sparkles size={48} color="#ffd369" strokeWidth={2} />
         <Text style={styles.title}>Somali Lobby</Text>
@@ -347,6 +362,12 @@ export default function LobbyScreen() {
         <Text style={styles.title}>Game Lobby</Text>
         <Text style={styles.subtitle}>Prepare your team</Text>
       </View>
+
+      {errorMessage ? (
+        <View style={styles.formCard}>
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        </View>
+      ) : null}
 
       {roomCode ? (
         <View style={styles.formCard}>
@@ -754,5 +775,21 @@ const styles = StyleSheet.create({
     marginTop: 16,
     color: '#c0c4d6',
     fontSize: 16,
+  },
+  debugButton: {
+    position: 'absolute' as const,
+    top: 20,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 211, 105, 0.1)',
+  },
+  debugButtonText: {
+    fontSize: 14,
+    color: '#ffd369',
+    fontWeight: '600',
   },
 });

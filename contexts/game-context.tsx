@@ -140,11 +140,15 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
   }, []);
 
   const fetchSnapshot = useCallback(async (code: string) => {
-    if (!code) return;
+    if (!code) {
+      console.log('[GameContext] fetchSnapshot - no code provided');
+      return;
+    }
     
     try {
       console.log('[GameContext] fetchSnapshot - fetching room:', code);
       const roomData = await db.getRoom(code);
+      console.log('[GameContext] fetchSnapshot - room data:', roomData ? 'found' : 'not found');
       
       if (!roomData) {
         console.log("[GameContext] Room not found for code:", code);
