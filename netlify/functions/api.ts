@@ -2,19 +2,20 @@ import { Handler } from '@netlify/functions';
 import app from '../../backend/hono';
 
 export const handler: Handler = async (event, context) => {
-  let path = event.path.replace('/.netlify/functions/api', '') || '/';
+  let path = event.path || '/';
   
-  if (!path.startsWith('/api')) {
-    path = '/api' + path;
-  }
+  console.log('[Netlify Function] Original path:', path);
+  console.log('[Netlify Function] Method:', event.httpMethod);
   
-  const url = new URL(path, `https://${event.headers.host}`);
+  const url = new URL(path, `https://${event.headers.host || 'localhost'}`);
   
   if (event.queryStringParameters) {
     Object.entries(event.queryStringParameters).forEach(([key, value]) => {
       if (value) url.searchParams.append(key, value);
     });
   }
+  
+  console.log('[Netlify Function] Full URL:', url.toString());
 
   const req = new Request(url.toString(), {
     method: event.httpMethod,
