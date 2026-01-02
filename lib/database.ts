@@ -56,11 +56,14 @@ const createRestDBAdapter = (): DBAdapter => {
     return { endpoint, namespace, token };
   };
 
-  const makeRequest = async (method: string, path: string, body?: unknown): Promise<unknown> => {
+  const makeRequest = async (method: string, table: string, id?: string, body?: unknown, query?: string): Promise<unknown> => {
     const { endpoint, namespace, token } = getConfig();
-    const url = `${endpoint}/${namespace}/${path}`;
     
-    console.log(`[DB:rest] ${method} ${path}`);
+    let url = `${endpoint}/tables/${table}`;
+    if (id) url += `/${id}`;
+    if (query) url += `?${query}`;
+    
+    console.log(`[DB:rest] ${method} ${url}`);
     
     try {
       const response = await fetch(url, {
@@ -68,6 +71,7 @@ const createRestDBAdapter = (): DBAdapter => {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
+          'X-Namespace': namespace,
         },
         body: body ? JSON.stringify(body) : undefined,
       });
@@ -105,13 +109,13 @@ const createRestDBAdapter = (): DBAdapter => {
         updated_at: new Date().toISOString(),
       };
 
-      const result = await makeRequest('POST', `rooms/${code}`, roomData);
+      const result = await makeRequest('POST', 'rooms', code, roomData);
       console.log('[DB:rest] createRoom', { code });
       return (result as DBRoom) || roomData;
     },
 
     async getRoom(code) {
-      const result = await makeRequest('GET', `rooms/${code}`);
+      const result = await makeRequest('GET', 'rooms', code);
       console.log('[DB:rest] getRoom', { code, found: Boolean(result) });
       return result as DBRoom | null;
     },
@@ -121,7 +125,7 @@ const createRestDBAdapter = (): DBAdapter => {
         ...updates,
         updated_at: new Date().toISOString(),
       };
-      await makeRequest('PATCH', `rooms/${code}`, updatedData);
+      await makeRequest('PATCH', 'rooms', code, updatedData);
       console.log('[DB:rest] updateRoom', { code, keys: Object.keys(updates) });
     },
 
@@ -137,13 +141,13 @@ const createRestDBAdapter = (): DBAdapter => {
         updated_at: new Date().toISOString(),
       };
 
-      const result = await makeRequest('POST', `players/${id}`, playerData);
+      const result = await makeRequest('POST', 'players', id, playerData);
       console.log('[DB:rest] createPlayer', { id, roomCode });
       return (result as DBPlayer) || playerData;
     },
 
     async getPlayer(id) {
-      const result = await makeRequest('GET', `players/${id}`);
+      const result = await makeRequest('GET', 'players', id);
       console.log('[DB:rest] getPlayer', { id, found: Boolean(result) });
       return result as DBPlayer | null;
     },
@@ -153,13 +157,14 @@ const createRestDBAdapter = (): DBAdapter => {
         ...updates,
         updated_at: new Date().toISOString(),
       };
-      await makeRequest('PATCH', `players/${id}`, updatedData);
+      await makeRequest('PATCH', 'players', id, updatedData);
       console.log('[DB:rest] updatePlayer', { id, keys: Object.keys(updates) });
     },
 
     async getPlayersByRoom(roomCode) {
       try {
-        const result = await makeRequest('GET', `players?room_code=${encodeURIComponent(roomCode)}&is_active=true`);
+        const query = `room_code=${encodeURIComponent(roomCode)}&is_active=true`;
+        const result = await makeRequest('GET', 'players', undefined, undefined, query);
         const players = Array.isArray(result) ? result : [];
         console.log('[DB:rest] getPlayersByRoom', { roomCode, count: players.length });
         return players as DBPlayer[];
@@ -170,7 +175,7 @@ const createRestDBAdapter = (): DBAdapter => {
     },
 
     async deletePlayer(id) {
-      await makeRequest('DELETE', `players/${id}`);
+      await makeRequest('DELETE', 'players', id);
       console.log('[DB:rest] deletePlayer', { id });
     },
   };
