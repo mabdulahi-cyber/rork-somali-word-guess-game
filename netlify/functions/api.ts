@@ -7,6 +7,11 @@ export const handler: Handler = async (event, context) => {
   console.log('[Netlify Function] Original path:', path);
   console.log('[Netlify Function] Method:', event.httpMethod);
   
+  // Strip the /.netlify/functions/api prefix
+  path = path.replace(/^\/\.netlify\/functions\/api/, '') || '/';
+  
+  console.log('[Netlify Function] Processed path:', path);
+  
   const url = new URL(path, `https://${event.headers.host || 'localhost'}`);
   
   if (event.queryStringParameters) {
