@@ -199,12 +199,32 @@ export default function GameScreen() {
   }, [currentPlayer, roomState]);
 
   const canGuess = useMemo(() => {
-    if (!roomState || !currentPlayer) return false;
-    return (
-      currentPlayer.role === 'guesser' &&
-      currentPlayer.team === roomState.turn.turnTeam &&
-      !roomState.winner
-    );
+    if (!roomState || !currentPlayer) {
+      console.log('[Game] canGuess: false - missing roomState or currentPlayer', { 
+        hasRoomState: !!roomState, 
+        hasCurrentPlayer: !!currentPlayer 
+      });
+      return false;
+    }
+    
+    const isGuesser = currentPlayer.role === 'guesser';
+    const isMyTeamTurn = currentPlayer.team === roomState.turn.turnTeam;
+    const gameNotOver = !roomState.winner;
+    
+    const result = isGuesser && isMyTeamTurn && gameNotOver;
+    
+    console.log('[Game] canGuess evaluation:', { 
+      result,
+      isGuesser, 
+      isMyTeamTurn, 
+      gameNotOver,
+      playerRole: currentPlayer.role,
+      playerTeam: currentPlayer.team,
+      currentTurnTeam: roomState.turn.turnTeam,
+      winner: roomState.winner
+    });
+    
+    return result;
   }, [currentPlayer, roomState]);
 
   const isMicOn = useMemo(() => {
@@ -213,16 +233,25 @@ export default function GameScreen() {
   }, [currentPlayer]);
 
   const handleCardPress = async (cardId: string) => {
-    console.log('[Game] Card pressed:', cardId, { canGuess, role: currentPlayer?.role, team: currentPlayer?.team });
+    console.log('[Game] Card pressed:', cardId, { 
+      canGuess, 
+      role: currentPlayer?.role, 
+      team: currentPlayer?.team,
+      turnTeam: roomState?.turn?.turnTeam,
+      turnStatus: roomState?.turn?.status
+    });
 
     if (!canGuess) {
       console.log('[Game] Cannot guess - conditions not met');
       return;
     }
+    
+    console.log('[Game] Attempting to reveal card:', cardId);
     try {
       await revealCard(cardId);
+      console.log('[Game] Card revealed successfully:', cardId);
     } catch (error) {
-      console.warn('Failed to reveal card', error);
+      console.error('[Game] Failed to reveal card:', cardId, error);
     }
   };
 

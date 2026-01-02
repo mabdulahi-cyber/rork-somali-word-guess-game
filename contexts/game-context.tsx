@@ -143,15 +143,24 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
     if (!code) return;
     
     try {
+      console.log('[GameContext] fetchSnapshot - fetching room:', code);
       const roomData = await db.getRoom(code);
       
       if (!roomData) {
-        console.log("[GameContext] Room not found");
+        console.log("[GameContext] Room not found for code:", code);
         setRoomState(null);
         return;
       }
 
+      console.log('[GameContext] fetchSnapshot - room data received:', {
+        code: roomData.code,
+        turnTeam: roomData.turn_team,
+        turnStatus: roomData.turn_status,
+        gameStatus: roomData.game_status,
+      });
+
       const playersData = await db.getPlayersByRoom(code);
+      console.log('[GameContext] fetchSnapshot - players received:', playersData.length);
 
       const cards = roomData.words.map((word: string, index: number) => ({
         id: `card-${index}`,
@@ -205,6 +214,7 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       };
 
       setRoomState(newState);
+      console.log('[GameContext] fetchSnapshot - state updated successfully');
     } catch (error) {
       console.error("[GameContext] fetchSnapshot exception", error);
     }
@@ -375,9 +385,12 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
   }, [roomCode, playerId, roomState]);
 
   const revealCard = useCallback(async (cardId: string) => {
-    if (!roomCode || !playerId || !roomState) return;
+    if (!roomCode || !playerId || !roomState) {
+      console.warn('[GameContext] revealCard - missing required data', { roomCode, playerId, hasRoomState: !!roomState });
+      return;
+    }
 
-    console.log('[GameContext] revealCard called', { cardId, roomCode });
+    console.log('[GameContext] revealCard called', { cardId, roomCode, playerId });
 
     const index = parseInt(cardId.split('-')[1]);
     

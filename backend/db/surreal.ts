@@ -1,38 +1,87 @@
-import { Surreal } from 'surrealdb';
-
-let db: Surreal | null = null;
-
-export const getDB = async (): Promise<Surreal> => {
-  if (db) return db;
-
+const getConfig = () => {
   const endpoint = process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT;
   const namespace = process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE;
   const token = process.env.EXPO_PUBLIC_RORK_DB_TOKEN;
 
   if (!endpoint || !namespace || !token) {
-    throw new Error('Missing database configuration');
+    console.error('[Backend:DB] Missing configuration:', { 
+      hasEndpoint: !!endpoint, 
+      hasNamespace: !!namespace, 
+      hasToken: !!token 
+    });
+    throw new Error('Missing database configuration: EXPO_PUBLIC_RORK_DB_ENDPOINT, EXPO_PUBLIC_RORK_DB_NAMESPACE, or EXPO_PUBLIC_RORK_DB_TOKEN');
   }
 
-  db = new Surreal();
-  
-  await db.connect(endpoint, {
-    namespace,
-    database: 'default',
-  });
-
-  await db.authenticate(token);
-
-  console.log('[Backend] SurrealDB connected');
-  return db;
+  return { endpoint, namespace, token };
 };
 
 export const queryDB = async <T = unknown>(query: string, vars?: Record<string, unknown>): Promise<T[]> => {
-  const db = await getDB();
-  const results = await db.query(query, vars);
+  const { endpoint, namespace, token } = getConfig();
   
-  if (!results || results.length === 0) {
-    return [];
+  const baseEndpoint = endpoint.replace(/\/rpc$/, '').replace(/\/$/, '');
+  const sqlEndpoint = baseEndpoint + '/sql';
+  
+  console.log('[Backend:DB] Executing query:', query.substring(0, 100));
+  console.log('[Backend:DB] Endpoint:', sqlEndpoint);
+  
+  let queryBody: string;
+  if (vars && Object.keys(vars).length > 0) {
+    let processedQuery = query;
+    for (const [key, value] of Object.entries(vars)) {
+      const jsonValue = JSON.stringify(value);
+      processedQuery = processedQuery.replace(new RegExp(`\\${key}`, 'g'), jsonValue);
+    }
+    queryBody = processedQuery;
+  } else {
+    queryBody = query;
   }
   
-  return results[0] as T[];
+  console.log('[Backend:DB] Processed query:', queryBody.substring(0, 200));
+  
+  try {
+    const response = await fetch(sqlEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'Surreal-NS': namespace,
+        'Surreal-DB': 'default',
+      },
+      body: queryBody,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Backend:DB] HTTP Error:', response.status, errorText);
+      throw new Error(`Database HTTP error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('[Backend:DB] Response received:', JSON.stringify(data).substring(0, 200));
+
+    if (Array.isArray(data)) {
+      if (data.length > 0 && data[0].result !== undefined) {
+        const result = data[0].result;
+        return Array.isArray(result) ? result : (result ? [result] : []);
+      }
+      return data as T[];
+    }
+
+    if (data && typeof data === 'object') {
+      if (data.result !== undefined) {
+        const result = data.result;
+        return Array.isArray(result) ? result : (result ? [result] : []);
+      }
+      if (data.error) {
+        console.error('[Backend:DB] Query error:', data.error);
+        throw new Error(`Database query error: ${JSON.stringify(data.error)}`);
+      }
+    }
+
+    return [];
+  } catch (error) {
+    console.error('[Backend:DB] Query failed:', error);
+    throw error;
+  }
 };
