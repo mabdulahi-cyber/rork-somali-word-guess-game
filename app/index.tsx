@@ -144,6 +144,12 @@ export default function LobbyScreen() {
   const handleEnterGame = () => {
     if (!canEnterGame) {
       console.log('[LobbyScreen] Cannot enter game - conditions not met');
+      const message = !currentPlayer?.name?.trim()
+        ? 'Enter your name to continue'
+        : !currentPlayer?.team
+        ? 'Pick a team to continue'
+        : 'Cannot enter game';
+      setErrorMessage(message);
       return;
     }
     if (!roomCode) {
@@ -152,7 +158,7 @@ export default function LobbyScreen() {
       return;
     }
     console.log('[LobbyScreen] Entering game with room code:', roomCode);
-    router.push({ pathname: '/room/[code]', params: { code: roomCode } });
+    router.push(`/room/${roomCode}`);
   };
 
   const renderPlayerList = () => {

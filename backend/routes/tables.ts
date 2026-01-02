@@ -37,11 +37,14 @@ app.post('/rooms/:id', async (c) => {
   const body = await c.req.json<DBRoom>();
   
   try {
+    console.log('[Backend] Creating room:', id);
+    const escapedId = id.replace(/'/g, "\\'");
     const result = await queryDB<DBRoom>(
-      `CREATE rooms:${id} CONTENT $data`,
+      `CREATE rooms:⟨${escapedId}⟩ CONTENT $data RETURN AFTER`,
       { data: body }
     );
     
+    console.log('[Backend] Room created:', result);
     return c.json(result[0] || body);
   } catch (error: any) {
     console.error('[Backend] Create room error:', error);
@@ -53,8 +56,11 @@ app.get('/rooms/:id', async (c) => {
   const id = c.req.param('id');
   
   try {
-    const result = await queryDB<DBRoom>(`SELECT * FROM rooms:${id}`);
+    console.log('[Backend] Getting room:', id);
+    const escapedId = id.replace(/'/g, "\\'");
+    const result = await queryDB<DBRoom>(`SELECT * FROM rooms:⟨${escapedId}⟩`);
     
+    console.log('[Backend] Room result:', result);
     if (!result || result.length === 0) {
       return c.json(null, 404);
     }
@@ -71,11 +77,14 @@ app.patch('/rooms/:id', async (c) => {
   const body = await c.req.json();
   
   try {
+    console.log('[Backend] Updating room:', id);
+    const escapedId = id.replace(/'/g, "\\'");
     const result = await queryDB<DBRoom>(
-      `UPDATE rooms:${id} MERGE $updates`,
+      `UPDATE rooms:⟨${escapedId}⟩ MERGE $updates RETURN AFTER`,
       { updates: body }
     );
     
+    console.log('[Backend] Room updated:', result);
     return c.json(result[0] || {});
   } catch (error: any) {
     console.error('[Backend] Update room error:', error);
@@ -88,11 +97,14 @@ app.post('/players/:id', async (c) => {
   const body = await c.req.json<DBPlayer>();
   
   try {
+    console.log('[Backend] Creating player:', id);
+    const escapedId = id.replace(/'/g, "\\'");
     const result = await queryDB<DBPlayer>(
-      `CREATE players:${id} CONTENT $data`,
+      `CREATE players:⟨${escapedId}⟩ CONTENT $data RETURN AFTER`,
       { data: body }
     );
     
+    console.log('[Backend] Player created:', result);
     return c.json(result[0] || body);
   } catch (error: any) {
     console.error('[Backend] Create player error:', error);
@@ -104,8 +116,11 @@ app.get('/players/:id', async (c) => {
   const id = c.req.param('id');
   
   try {
-    const result = await queryDB<DBPlayer>(`SELECT * FROM players:${id}`);
+    console.log('[Backend] Getting player:', id);
+    const escapedId = id.replace(/'/g, "\\'");
+    const result = await queryDB<DBPlayer>(`SELECT * FROM players:⟨${escapedId}⟩`);
     
+    console.log('[Backend] Player result:', result);
     if (!result || result.length === 0) {
       return c.json(null, 404);
     }
@@ -122,11 +137,14 @@ app.patch('/players/:id', async (c) => {
   const body = await c.req.json();
   
   try {
+    console.log('[Backend] Updating player:', id);
+    const escapedId = id.replace(/'/g, "\\'");
     const result = await queryDB<DBPlayer>(
-      `UPDATE players:${id} MERGE $updates`,
+      `UPDATE players:⟨${escapedId}⟩ MERGE $updates RETURN AFTER`,
       { updates: body }
     );
     
+    console.log('[Backend] Player updated:', result);
     return c.json(result[0] || {});
   } catch (error: any) {
     console.error('[Backend] Update player error:', error);
@@ -138,7 +156,9 @@ app.delete('/players/:id', async (c) => {
   const id = c.req.param('id');
   
   try {
-    await queryDB(`DELETE players:${id}`);
+    console.log('[Backend] Deleting player:', id);
+    const escapedId = id.replace(/'/g, "\\'");
+    await queryDB(`DELETE players:⟨${escapedId}⟩`);
     return c.json({ success: true });
   } catch (error: any) {
     console.error('[Backend] Delete player error:', error);
