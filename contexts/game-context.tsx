@@ -113,6 +113,7 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
   const [roomState, setRoomState] = useState<RoomState | null>(null);
   const [isRoomLoading, setIsRoomLoading] = useState<boolean>(false);
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
+  const [revealingCards, setRevealingCards] = useState<Set<string>>(new Set());
 
   // Initialize player ID
   useEffect(() => {
@@ -391,10 +392,35 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       return;
     }
 
+    if (revealingCards.has(cardId)) {
+      console.log('[GameContext] revealCard - card already being revealed (preventing double-tap)', cardId);
+      return;
+    }
+
+    console.log('[GameContext] ========================================');
     console.log('[GameContext] revealCard called', { cardId, roomCode, playerId });
 
     const index = parseInt(cardId.split('-')[1]);
     
+    const cardToReveal = roomState.cards[index];
+    if (!cardToReveal) {
+      console.warn('[GameContext] revealCard - invalid card index', index);
+      return;
+    }
+
+    if (cardToReveal.revealed) {
+      console.log('[GameContext] revealCard - card already revealed (UI state)');
+      return;
+    }
+
+    setRevealingCards(prev => new Set(prev).add(cardId));
+
+    console.log('[GameContext] Card before reveal:', { 
+      word: cardToReveal.word, 
+      type: cardToReveal.type, 
+      revealed: cardToReveal.revealed 
+    });
+
     const room = await db.getRoom(roomCode);
     if (!room) {
       console.warn('[GameContext] revealCard - room not found');
@@ -402,7 +428,7 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
     }
 
     if (room.revealed[index]) {
-      console.log('[GameContext] revealCard - card already revealed');
+      console.log('[GameContext] revealCard - card already revealed (DB state)');
       return;
     }
 
@@ -416,7 +442,7 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
     let gameStatus = room.game_status;
     let winner = room.winner_team;
 
-    console.log('[GameContext] Card revealed', { cardType, currentTeam: turnTeam });
+    console.log('[GameContext] Card type revealed:', { cardType, currentTeam: turnTeam });
 
     let shouldEndTurn = false;
     
@@ -470,6 +496,42 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
         guessesLeft = 0;
     }
 
+    console.log('[GameContext] Optimistically updating UI state...');
+    setRoomState(prevState => {
+      if (!prevState) return prevState;
+      
+      const updatedCards = prevState.cards.map((c, i) => 
+        i === index ? { ...c, revealed: true } : c
+      );
+      
+      const redLeft = updatedCards.filter(c => c.type === 'red' && !c.revealed).length;
+      const blueLeft = updatedCards.filter(c => c.type === 'blue' && !c.revealed).length;
+      
+      console.log('[GameContext] UI updated optimistically - card revealed:', { 
+        cardIndex: index, 
+        word: updatedCards[index].word,
+        redLeft,
+        blueLeft
+      });
+      
+      return {
+        ...prevState,
+        cards: updatedCards,
+        redCardsLeft: redLeft,
+        blueCardsLeft: blueLeft,
+        currentTeam: turnTeam,
+        winner: gameStatus === 'ENDED' ? (winner as Team | 'assassinated') : prevState.winner,
+        turn: {
+          turnTeam: turnTeam,
+          status: turnStatus as 'WAITING_HINT' | 'GUESSING',
+          hintWord: turnStatus === 'WAITING_HINT' ? null : prevState.turn.hintWord,
+          hintNumber: turnStatus === 'WAITING_HINT' ? null : prevState.turn.hintNumber,
+          guessesLeft: guessesLeft,
+        },
+      };
+    });
+
+    console.log('[GameContext] Writing to database...');
     await db.updateRoom(roomCode, {
         revealed: newRevealed,
         turn_team: turnTeam,
@@ -479,9 +541,15 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
         winner_team: winner
     });
 
-    console.log('[GameContext] revealCard - room updated successfully');
-    await fetchSnapshot(roomCode);
-  }, [roomCode, playerId, roomState, fetchSnapshot]);
+    console.log('[GameContext] Database updated successfully');
+    console.log('[GameContext] ========================================');
+    
+    setRevealingCards(prev => {
+      const next = new Set(prev);
+      next.delete(cardId);
+      return next;
+    });
+  }, [roomCode, playerId, roomState, revealingCards]);
 
   const sendHint = useCallback(async (word: string, number: number) => {
     if (!roomCode) return;
