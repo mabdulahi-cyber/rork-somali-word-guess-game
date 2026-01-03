@@ -1,4 +1,5 @@
 import type { CardType, Team } from '@/types/game';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface DBRoom {
   [key: string]: unknown;
@@ -43,51 +44,49 @@ interface DBAdapter {
   deletePlayer: (id: string) => Promise<void>;
 }
 
-const createRestDBAdapter = (): DBAdapter => {
+const createLocalDBAdapter = (): DBAdapter => {
+  const ROOMS_KEY = 'somali-codenames.rooms';
+  const PLAYERS_KEY = 'somali-codenames.players';
 
-  const makeRequest = async (method: string, table: string, id?: string, body?: unknown, query?: string): Promise<unknown> => {
-    let url = `/api/tables/${table}`;
-    
-    if (id) url += `/${id}`;
-    if (query) url += `?${query}`;
-    
-    console.log(`[DB:rest] ${method} ${url}`);
-    console.log('[DB:rest] Request body:', body ? JSON.stringify(body).substring(0, 200) : 'none');
-    
+  const loadRooms = async (): Promise<Record<string, DBRoom>> => {
     try {
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: body ? JSON.stringify(body) : undefined,
-      });
-
-      console.log(`[DB:rest] Response status: ${response.status}`);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[DB:rest] Error ${response.status}:`, errorText);
-        if (response.status === 404) {
-          if (method === 'GET') {
-            return null;
-          }
-          throw new Error(`Resource not found: ${url}`);
-        }
-        throw new Error(`Database request failed: ${response.status} ${errorText}`);
-      }
-
-      const data = await response.json();
-      console.log('[DB:rest] Response data:', JSON.stringify(data).substring(0, 200));
-      return data;
+      const data = await AsyncStorage.getItem(ROOMS_KEY);
+      return data ? JSON.parse(data) : {};
     } catch (error) {
-      console.error(`[DB:rest] Request failed for ${method} ${url}:`, error);
-      throw error;
+      console.error('[DB:local] Failed to load rooms', error);
+      return {};
+    }
+  };
+
+  const saveRooms = async (rooms: Record<string, DBRoom>): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(ROOMS_KEY, JSON.stringify(rooms));
+    } catch (error) {
+      console.error('[DB:local] Failed to save rooms', error);
+    }
+  };
+
+  const loadPlayers = async (): Promise<Record<string, DBPlayer>> => {
+    try {
+      const data = await AsyncStorage.getItem(PLAYERS_KEY);
+      return data ? JSON.parse(data) : {};
+    } catch (error) {
+      console.error('[DB:local] Failed to load players', error);
+      return {};
+    }
+  };
+
+  const savePlayers = async (players: Record<string, DBPlayer>): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(PLAYERS_KEY, JSON.stringify(players));
+    } catch (error) {
+      console.error('[DB:local] Failed to save players', error);
     }
   };
 
   const adapter: DBAdapter = {
     async createRoom(code, words, keyMap, startingTeam) {
+      const rooms = await loadRooms();
       const roomData: DBRoom = {
         code,
         words,
@@ -101,28 +100,36 @@ const createRestDBAdapter = (): DBAdapter => {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
-
-      const result = await makeRequest('POST', 'rooms', code, roomData);
-      console.log('[DB:rest] createRoom', { code });
-      return (result as DBRoom) || roomData;
+      rooms[code] = roomData;
+      await saveRooms(rooms);
+      console.log('[DB:local] createRoom', { code });
+      return roomData;
     },
 
     async getRoom(code) {
-      const result = await makeRequest('GET', 'rooms', code);
-      console.log('[DB:rest] getRoom', { code, found: Boolean(result) });
-      return result as DBRoom | null;
+      const rooms = await loadRooms();
+      const room = rooms[code] || null;
+      console.log('[DB:local] getRoom', { code, found: Boolean(room) });
+      return room;
     },
 
     async updateRoom(code, updates) {
-      const updatedData = {
+      const rooms = await loadRooms();
+      if (!rooms[code]) {
+        console.warn('[DB:local] updateRoom - room not found', code);
+        return;
+      }
+      rooms[code] = {
+        ...rooms[code],
         ...updates,
         updated_at: new Date().toISOString(),
       };
-      await makeRequest('PATCH', 'rooms', code, updatedData);
-      console.log('[DB:rest] updateRoom', { code, keys: Object.keys(updates) });
+      await saveRooms(rooms);
+      console.log('[DB:local] updateRoom', { code, keys: Object.keys(updates) });
     },
 
     async createPlayer(id, roomCode, name) {
+      const players = await loadPlayers();
       const playerData: DBPlayer = {
         id,
         room_code: roomCode,
@@ -133,50 +140,60 @@ const createRestDBAdapter = (): DBAdapter => {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
-
-      const result = await makeRequest('POST', 'players', id, playerData);
-      console.log('[DB:rest] createPlayer', { id, roomCode });
-      return (result as DBPlayer) || playerData;
+      players[id] = playerData;
+      await savePlayers(players);
+      console.log('[DB:local] createPlayer', { id, roomCode });
+      return playerData;
     },
 
     async getPlayer(id) {
-      const result = await makeRequest('GET', 'players', id);
-      console.log('[DB:rest] getPlayer', { id, found: Boolean(result) });
-      return result as DBPlayer | null;
+      const players = await loadPlayers();
+      const player = players[id] || null;
+      console.log('[DB:local] getPlayer', { id, found: Boolean(player) });
+      return player;
     },
 
     async updatePlayer(id, updates) {
-      const updatedData = {
+      const players = await loadPlayers();
+      if (!players[id]) {
+        console.warn('[DB:local] updatePlayer - player not found', id);
+        return;
+      }
+      players[id] = {
+        ...players[id],
         ...updates,
         updated_at: new Date().toISOString(),
       };
-      await makeRequest('PATCH', 'players', id, updatedData);
-      console.log('[DB:rest] updatePlayer', { id, keys: Object.keys(updates) });
+      await savePlayers(players);
+      console.log('[DB:local] updatePlayer', { id, keys: Object.keys(updates) });
     },
 
     async getPlayersByRoom(roomCode) {
       try {
-        const query = `room_code=${encodeURIComponent(roomCode)}&is_active=true`;
-        const result = await makeRequest('GET', 'players', undefined, undefined, query);
-        const players = Array.isArray(result) ? result : [];
-        console.log('[DB:rest] getPlayersByRoom', { roomCode, count: players.length });
-        return players as DBPlayer[];
+        const players = await loadPlayers();
+        const roomPlayers = Object.values(players).filter(
+          (p) => p.room_code === roomCode && p.is_active
+        );
+        console.log('[DB:local] getPlayersByRoom', { roomCode, count: roomPlayers.length });
+        return roomPlayers;
       } catch (error) {
-        console.error('[DB:rest] getPlayersByRoom error:', error);
+        console.error('[DB:local] getPlayersByRoom error:', error);
         return [];
       }
     },
 
     async deletePlayer(id) {
-      await makeRequest('DELETE', 'players', id);
-      console.log('[DB:rest] deletePlayer', { id });
+      const players = await loadPlayers();
+      delete players[id];
+      await savePlayers(players);
+      console.log('[DB:local] deletePlayer', { id });
     },
   };
 
   return adapter;
 };
 
-const adapter: DBAdapter = createRestDBAdapter();
+const adapter: DBAdapter = createLocalDBAdapter();
 
 export const db: DBAdapter = adapter;
 export type { DBRoom, DBPlayer };
