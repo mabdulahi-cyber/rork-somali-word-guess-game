@@ -6,6 +6,7 @@ export const handler: Handler = async (event, context) => {
   
   console.log('[Netlify Function] Original path:', path);
   console.log('[Netlify Function] Method:', event.httpMethod);
+  console.log('[Netlify Function] Raw path:', event.rawUrl);
   
   // Strip the /.netlify/functions/api prefix
   path = path.replace(/^\/\.netlify\/functions\/api/, '') || '/';

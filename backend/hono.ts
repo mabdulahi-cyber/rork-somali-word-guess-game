@@ -19,14 +19,10 @@ app.get('/health', (c) => {
   });
 });
 
-app.route('/api/tables', tablesRouter);
+app.route('/tables', tablesRouter);
 
 app.get('/', (c) => {
   return c.json({ status: 'ok', message: 'Somali Codenames API is running' });
-});
-
-app.get('/api', (c) => {
-  return c.json({ status: 'ok', message: 'Somali Codenames API is running at /api' });
 });
 
 app.notFound((c) => {

@@ -29,7 +29,8 @@ export const queryDB = async <T = unknown>(query: string, vars?: Record<string, 
     let processedQuery = query;
     for (const [key, value] of Object.entries(vars)) {
       const jsonValue = JSON.stringify(value);
-      processedQuery = processedQuery.replace(new RegExp(`\\${key}`, 'g'), jsonValue);
+      const placeholder = '$' + key;
+      processedQuery = processedQuery.replace(new RegExp('\\' + placeholder, 'g'), jsonValue);
     }
     queryBody = processedQuery;
   } else {
