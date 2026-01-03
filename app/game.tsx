@@ -35,6 +35,20 @@ interface WordCardProps {
 
 function WordCard({ card, onPress, disabled, cardSize, isSpymaster }: WordCardProps) {
   const [scaleAnim] = useState(new Animated.Value(1));
+  const [flipAnim] = useState(new Animated.Value(0));
+  const [hasFlipped, setHasFlipped] = useState(card.revealed);
+
+  useEffect(() => {
+    if (card.revealed && !hasFlipped) {
+      setHasFlipped(true);
+      Animated.spring(flipAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: Platform.OS !== 'web',
+      }).start();
+    }
+  }, [card.revealed, hasFlipped, flipAnim]);
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
@@ -49,6 +63,21 @@ function WordCard({ card, onPress, disabled, cardSize, isSpymaster }: WordCardPr
       useNativeDriver: Platform.OS !== 'web',
     }).start();
   };
+
+  const flipRotation = flipAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '180deg'],
+  });
+
+  const frontOpacity = flipAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [1, 0, 0],
+  });
+
+  const backOpacity = flipAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0, 0, 1],
+  });
 
   const getCardColors = (): [string, string] => {
     if (card.revealed) {
@@ -92,12 +121,21 @@ function WordCard({ card, onPress, disabled, cardSize, isSpymaster }: WordCardPr
   };
 
   const colors = getCardColors();
+  const neutralColors: [string, string] = ['#e8e8e8', '#d0d0d0'];
 
   return (
     <Animated.View
       style={[
         styles.cardContainer,
-        { width: cardSize, height: cardSize, transform: [{ scale: scaleAnim }] },
+        { 
+          width: cardSize, 
+          height: cardSize, 
+          transform: [
+            { scale: scaleAnim },
+            { perspective: 1000 },
+            { rotateY: flipRotation }
+          ] 
+        },
       ]}
     >
       <Pressable
@@ -112,24 +150,42 @@ function WordCard({ card, onPress, disabled, cardSize, isSpymaster }: WordCardPr
           pressed && !disabled && styles.cardPressed,
         ]}
       >
-        <LinearGradient
-          colors={colors}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.card, card.revealed && styles.cardRevealed]}
-        >
-          <Text style={[styles.cardText, { color: getTextColor() }]}>
-            {card.word}
-          </Text>
-          {(card.revealed || isSpymaster) && card.type === 'assassin' && (
-            <Text style={styles.assassinEmoji}>💀</Text>
-          )}
-          {!card.revealed && isSpymaster && (
-            <View style={styles.spymasterOverlay}>
-              <Text style={styles.spymasterLabel}>KEY</Text>
-            </View>
-          )}
-        </LinearGradient>
+        <Animated.View style={[styles.cardFace, { opacity: frontOpacity }]}>
+          <LinearGradient
+            colors={isSpymaster ? colors : neutralColors}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.card}
+          >
+            <Text style={[styles.cardText, { color: isSpymaster ? getTextColor() : '#2d3436' }]}>
+              {card.word}
+            </Text>
+            {!card.revealed && isSpymaster && (
+              <View style={styles.spymasterOverlay}>
+                <Text style={styles.spymasterLabel}>KEY</Text>
+              </View>
+            )}
+            {isSpymaster && card.type === 'assassin' && (
+              <Text style={styles.assassinEmoji}>💀</Text>
+            )}
+          </LinearGradient>
+        </Animated.View>
+
+        <Animated.View style={[styles.cardFace, styles.cardBack, { opacity: backOpacity }]}>
+          <LinearGradient
+            colors={colors}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.card, styles.cardRevealed]}
+          >
+            <Text style={[styles.cardText, { color: getTextColor() }]}>
+              {card.word}
+            </Text>
+            {card.type === 'assassin' && (
+              <Text style={styles.assassinEmoji}>💀</Text>
+            )}
+          </LinearGradient>
+        </Animated.View>
       </Pressable>
     </Animated.View>
   );
@@ -890,10 +946,19 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   cardContainer: {
-    // marginBottom removed to rely on gap for consistent spacing
+    position: 'relative',
   },
   cardPressable: {
     flex: 1,
+  },
+  cardFace: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    backfaceVisibility: 'hidden',
+  },
+  cardBack: {
+    transform: [{ rotateY: '180deg' }],
   },
   cardPressed: {
     opacity: 0.8,
