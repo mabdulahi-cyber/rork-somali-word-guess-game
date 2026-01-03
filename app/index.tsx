@@ -158,7 +158,7 @@ export default function LobbyScreen() {
       return;
     }
     console.log('[LobbyScreen] Entering game with room code:', roomCode);
-    router.push(`/room/${roomCode}`);
+    router.replace(`/room/${roomCode}`);
   };
 
   const renderPlayerList = () => {

@@ -300,22 +300,19 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
         await db.updatePlayer(playerId, {
           room_code: code,
           name: trimmedName,
-          team: 'red',
+          team: null,
           role: 'guesser',
           is_active: true,
         });
       } else {
         await db.createPlayer(playerId, code, trimmedName);
-        await db.updatePlayer(playerId, {
-          team: 'red',
-          role: 'guesser',
-          is_active: true,
-        });
       }
 
       setPlayerName(trimmedName);
-      setRoomCode(code);
       await AsyncStorage.setItem(ROOM_CODE_STORAGE_KEY, code);
+      setRoomCode(code);
+      
+      await fetchSnapshot(code);
 
       console.log('[GameContext] createRoom - SUCCESS', { code, playerId });
     } catch (error) {
@@ -325,7 +322,7 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       console.error('[GameContext] createRoom normalized error:', msg);
       throw new Error(msg);
     }
-  }, [playerId]);
+  }, [playerId, fetchSnapshot]);
 
   const joinRoom = useCallback(async (name: string, code: string) => {
     const trimmedName = name.trim();

@@ -12,6 +12,7 @@ export default function RoomCodeScreen() {
   useEffect(() => {
     if (code && typeof code === 'string') {
         const upperCode = code.toUpperCase();
+        console.log("[RoomCodeScreen] URL code:", upperCode, "Current roomCode:", roomCode);
         if (roomCode !== upperCode) {
             console.log("[RoomCodeScreen] Setting room code from URL:", upperCode);
             setRoomCode(upperCode);

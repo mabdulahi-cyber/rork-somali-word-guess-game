@@ -49,16 +49,18 @@ const createRestDBAdapter = (): DBAdapter => {
     let apiBaseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
     
     if (!apiBaseUrl) {
-      apiBaseUrl = typeof window !== 'undefined' ? '/.netlify/functions/api' : '';
+      apiBaseUrl = typeof window !== 'undefined' ? '/.netlify/functions/api/api/tables' : '/api/tables';
       console.log('[DB:rest] Using default API base URL:', apiBaseUrl);
+    } else {
+      apiBaseUrl = `${apiBaseUrl}/api/tables`;
     }
     
     if (!apiBaseUrl) {
-      console.error('[DB:rest] Missing EXPO_PUBLIC_RORK_API_BASE_URL');
-      throw new Error('Missing EXPO_PUBLIC_RORK_API_BASE_URL environment variable');
+      console.error('[DB:rest] Missing API base URL');
+      throw new Error('Missing API base URL');
     }
     
-    let url = `${apiBaseUrl}/api/tables/${table}`;
+    let url = `${apiBaseUrl}/${table}`;
     if (id) url += `/${id}`;
     if (query) url += `?${query}`;
     
