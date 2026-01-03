@@ -46,16 +46,7 @@ interface DBAdapter {
 const createRestDBAdapter = (): DBAdapter => {
 
   const makeRequest = async (method: string, table: string, id?: string, body?: unknown, query?: string): Promise<unknown> => {
-    const envBaseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
-    
-    let url: string;
-    if (envBaseUrl) {
-      console.log('[DB:rest] Using env API base URL:', envBaseUrl);
-      url = `${envBaseUrl}/tables/${table}`;
-    } else {
-      console.log('[DB:rest] Using Netlify function URL');
-      url = `/.netlify/functions/api/tables/${table}`;
-    }
+    let url = `/api/tables/${table}`;
     
     if (id) url += `/${id}`;
     if (query) url += `?${query}`;
