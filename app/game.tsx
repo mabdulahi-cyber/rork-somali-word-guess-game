@@ -79,7 +79,7 @@ function WordCard({ card, onPress, disabled, cardSize, isSpymaster }: WordCardPr
     if (isSpymaster) {
       return {
         bg: CARD_COLORS[card.type].bg + '40',
-        text: UNREVEALED_CARD.text,
+        text: '#FFFFFF',
         border: CARD_COLORS[card.type].bg,
       };
     }
