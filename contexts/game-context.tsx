@@ -485,11 +485,13 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
         }
     }
 
+    let shouldClearHint = false;
     if (shouldEndTurn && gameStatus !== 'ENDED') {
         console.log('[GameContext] Switching turn to other team');
         turnTeam = turnTeam === 'red' ? 'blue' : 'red';
         turnStatus = 'WAITING_HINT';
         guessesLeft = 0;
+        shouldClearHint = true;
     }
 
     console.log('[GameContext] Optimistically updating UI state...');
@@ -510,13 +512,18 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
         blueLeft
       });
       
+      const isAssassinated = cardType === 'assassin';
+      
       return {
         ...prevState,
         cards: updatedCards,
         redCardsLeft: redLeft,
         blueCardsLeft: blueLeft,
         currentTeam: turnTeam,
-        winner: gameStatus === 'ENDED' ? (winner as Team | 'assassinated') : prevState.winner,
+        winner: gameStatus === 'ENDED' 
+          ? (isAssassinated ? 'assassinated' : (winner as Team)) 
+          : prevState.winner,
+        currentHint: turnStatus === 'WAITING_HINT' ? null : prevState.currentHint,
         turn: {
           turnTeam: turnTeam,
           status: turnStatus as 'WAITING_HINT' | 'GUESSING',
@@ -528,14 +535,21 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
     });
 
     console.log('[GameContext] Writing to database...');
-    await db.updateRoom(roomCode, {
+    const dbUpdate: Partial<Parameters<typeof db.updateRoom>[1]> = {
         revealed: newRevealed,
         turn_team: turnTeam,
         turn_status: turnStatus,
         guesses_left: guessesLeft,
         game_status: gameStatus,
         winner_team: winner
-    });
+    };
+    
+    if (shouldClearHint) {
+        dbUpdate.hint_word = undefined;
+        dbUpdate.hint_number = undefined;
+    }
+    
+    await db.updateRoom(roomCode, dbUpdate);
 
     console.log('[GameContext] Database updated successfully');
     console.log('[GameContext] ========================================');
