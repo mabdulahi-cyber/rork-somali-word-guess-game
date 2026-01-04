@@ -454,16 +454,12 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
         console.log('[GameContext] Neutral card - ending turn');
         shouldEndTurn = true;
     } else if (cardType !== turnTeam) {
-        console.log('[GameContext] Wrong team card - ending turn');
+        console.log('[GameContext] Wrong team card (opponent) - ending turn');
         shouldEndTurn = true;
     } else {
-        console.log('[GameContext] Correct guess');
-        if (guessesLeft > 0) {
-          guessesLeft -= 1;
-        }
-        if (guessesLeft === 0) {
-            shouldEndTurn = true;
-        }
+        console.log('[GameContext] Correct guess - team can continue guessing');
+        // Correct guess - team keeps guessing (unlimited guesses for correct colors)
+        // guessesLeft stays at 999 to indicate unlimited
     }
 
     const totalRed = room.key_map.filter((t: string) => t === 'red').length;
@@ -558,7 +554,7 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
         hint_word: word,
         hint_number: number,
         turn_status: 'GUESSING',
-        guesses_left: number + 1
+        guesses_left: 999 // Unlimited guesses until wrong color is tapped
     });
     await fetchSnapshot(roomCode);
   }, [roomCode, fetchSnapshot]);
