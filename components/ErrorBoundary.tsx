@@ -1,9 +1,10 @@
 import React from "react";
-import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform, ScrollView } from "react-native";
 
 interface ErrorBoundaryState {
   hasError: boolean;
   errorMessage: string | null;
+  errorStack: string | null;
 }
 
 interface ErrorBoundaryProps {
@@ -17,12 +18,14 @@ export class AppErrorBoundary extends React.Component<
   public state: ErrorBoundaryState = {
     hasError: false,
     errorMessage: null,
+    errorStack: null,
   };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return {
       hasError: true,
       errorMessage: error.message ?? "Unexpected error",
+      errorStack: error.stack ?? null,
     };
   }
 
@@ -44,9 +47,14 @@ export class AppErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <View style={styles.container} testID="app-error-boundary">
+        <ScrollView contentContainerStyle={styles.container} testID="app-error-boundary">
           <Text style={styles.title}>Something went wrong</Text>
           <Text style={styles.message}>{this.state.errorMessage}</Text>
+          {Platform.OS === 'web' && this.state.errorStack && (
+            <View style={styles.stackContainer}>
+              <Text style={styles.stackText}>{this.state.errorStack}</Text>
+            </View>
+          )}
           <Text style={styles.hint}>Check your network connection and try again.</Text>
           <Pressable
             style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
@@ -55,7 +63,7 @@ export class AppErrorBoundary extends React.Component<
           >
             <Text style={styles.buttonText}>Try again</Text>
           </Pressable>
-        </View>
+        </ScrollView>
       );
     }
 
@@ -65,11 +73,24 @@ export class AppErrorBoundary extends React.Component<
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
+    paddingVertical: 40,
     backgroundColor: "#0f172a",
+  },
+  stackContainer: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    maxWidth: '100%',
+  },
+  stackText: {
+    fontSize: 10,
+    color: "#94a3b8",
+    fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
   },
   title: {
     fontSize: 24,

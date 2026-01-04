@@ -1,9 +1,24 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Platform } from "react-native";
+import { View, Text, StyleSheet, Platform, LogBox } from "react-native";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { AppErrorBoundary } from "@/components/ErrorBoundary";
 import { GameProvider } from "@/contexts/game-context";
+
+if (Platform.OS !== 'web') {
+  LogBox.ignoreLogs(['Setting a timer']);
+}
+
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  window.onerror = function(message, source, lineno, colno, error) {
+    console.error('[Global Error]', { message, source, lineno, colno, error });
+    return false;
+  };
+  
+  window.onunhandledrejection = function(event) {
+    console.error('[Unhandled Promise Rejection]', event.reason);
+  };
+}
 
 
 function RootLayoutNav() {
@@ -21,6 +36,12 @@ function RootLayoutNav() {
 export default function RootLayout() {
   const [isReady, setIsReady] = useState(Platform.OS === 'web');
   const [initError, setInitError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    console.log('[RootLayout] Component mounted, Platform:', Platform.OS);
+  }, []);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -57,7 +78,7 @@ export default function RootLayout() {
     void run();
   }, []);
 
-  if (!isReady) {
+  if (!isReady || !mounted) {
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.loadingText}>Loading...</Text>
