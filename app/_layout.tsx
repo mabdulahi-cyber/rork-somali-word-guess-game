@@ -5,19 +5,6 @@ import * as SplashScreen from "expo-splash-screen";
 import { AppErrorBoundary } from "@/components/ErrorBoundary";
 import { GameProvider } from "@/contexts/game-context";
 
-try {
-  if (!(React as any).use) {
-    (React as any).use = function <T>(promise: Promise<T> | T): T {
-      if (promise && typeof (promise as any).then === 'function') {
-        throw promise;
-      }
-      return promise as T;
-    };
-  }
-} catch (e) {
-  console.warn('Failed to polyfill React.use', e);
-}
-
 
 function RootLayoutNav() {
   return (
@@ -32,32 +19,33 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const [isReady, setIsReady] = useState(false);
+  const [isReady, setIsReady] = useState(Platform.OS === 'web');
   const [initError, setInitError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (Platform.OS === 'web') {
+      console.log('[RootLayout] Web platform - ready immediately');
+      return;
+    }
+
     const run = async () => {
       try {
         console.log('[RootLayout] Initializing app...');
         console.log('[RootLayout] Platform:', Platform.OS);
         
-        if (Platform.OS !== 'web') {
-          try {
-            await SplashScreen.preventAutoHideAsync();
-          } catch (error) {
-            console.warn("SplashScreen.preventAutoHideAsync failed", error);
-          }
+        try {
+          await SplashScreen.preventAutoHideAsync();
+        } catch (error) {
+          console.warn("SplashScreen.preventAutoHideAsync failed", error);
         }
 
         setIsReady(true);
         console.log('[RootLayout] App ready');
 
-        if (Platform.OS !== 'web') {
-          try {
-            await SplashScreen.hideAsync();
-          } catch (error) {
-            console.warn("SplashScreen.hideAsync failed", error);
-          }
+        try {
+          await SplashScreen.hideAsync();
+        } catch (error) {
+          console.warn("SplashScreen.hideAsync failed", error);
         }
       } catch (error: any) {
         console.error('[RootLayout] Initialization error:', error);

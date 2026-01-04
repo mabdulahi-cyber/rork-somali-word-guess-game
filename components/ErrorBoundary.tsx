@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -28,6 +28,13 @@ export class AppErrorBoundary extends React.Component<
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("App crashed", error, errorInfo.componentStack);
+    if (Platform.OS === 'web') {
+      console.error('[ErrorBoundary] Web error details:', {
+        message: error.message,
+        stack: error.stack,
+        componentStack: errorInfo.componentStack,
+      });
+    }
   }
 
   private handleReset = () => {

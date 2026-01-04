@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, createContext, useContext } from "react";
 import type { FunctionComponent, ReactNode } from "react";
+import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { db } from "@/lib/database";
 import type { Player, Role, RoomState, Team, Card, CardType } from "@/types/game";
@@ -119,21 +120,29 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      const id = await tryLoadClientId();
-      if (cancelled) return;
-      setPlayerId(id);
-      console.log("[GameContext] playerId (clientId)", id);
-
       try {
-        const storedRoomCode = await AsyncStorage.getItem(ROOM_CODE_STORAGE_KEY);
-        if (storedRoomCode?.trim()) {
-          console.log("[GameContext] Loaded roomCode from storage:", storedRoomCode);
-          setRoomCode(storedRoomCode);
+        console.log('[GameContext] Starting initialization, Platform:', Platform.OS);
+        const id = await tryLoadClientId();
+        if (cancelled) return;
+        setPlayerId(id);
+        console.log("[GameContext] playerId (clientId)", id);
+
+        try {
+          const storedRoomCode = await AsyncStorage.getItem(ROOM_CODE_STORAGE_KEY);
+          if (storedRoomCode?.trim()) {
+            console.log("[GameContext] Loaded roomCode from storage:", storedRoomCode);
+            setRoomCode(storedRoomCode);
+          }
+        } catch (error) {
+          console.warn("[GameContext] Failed to load roomCode from storage", error);
         }
       } catch (error) {
-        console.warn("[GameContext] Failed to load roomCode from storage", error);
+        console.error('[GameContext] Critical initialization error:', error);
       } finally {
-        setIsInitializing(false);
+        if (!cancelled) {
+          setIsInitializing(false);
+          console.log('[GameContext] Initialization complete');
+        }
       }
     };
     void run();
