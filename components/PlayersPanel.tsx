@@ -16,13 +16,16 @@ export function PlayersPanel({
   onSwitchTeam,
   onChangeRole,
 }: PlayersPanelProps) {
-  const redPlayers = players.filter((p) => p.team === 'red');
-  const bluePlayers = players.filter((p) => p.team === 'blue');
-  const spectators = players.filter((p) => !p.team);
+  const safePlayers = Array.isArray(players) ? players.filter(Boolean) : [];
+  const redPlayers = safePlayers.filter((p) => p && p.team === 'red');
+  const bluePlayers = safePlayers.filter((p) => p && p.team === 'blue');
+  const spectators = safePlayers.filter((p) => p && !p.team);
 
-  const currentPlayer = players.find((p) => p.id === currentPlayerId);
+  const currentPlayer = safePlayers.find((p) => p && p.id === currentPlayerId);
 
   const renderPlayerItem = (player: Player) => {
+    if (!player || !player.id || !player.name) return null;
+    
     const isMe = player.id === currentPlayerId;
     const isSpymaster = player.role === 'spymaster';
 
@@ -77,8 +80,9 @@ export function PlayersPanel({
         </View>
         
         <ScrollView style={styles.teamList} nestedScrollEnabled>
-          {teamPlayers.map(renderPlayerItem)}
-          {teamPlayers.length === 0 && (
+          {Array.isArray(teamPlayers) && teamPlayers.length > 0 ? (
+            teamPlayers.filter(Boolean).map(renderPlayerItem)
+          ) : (
             <Text style={styles.emptyTeamText}>No players</Text>
           )}
         </ScrollView>
@@ -138,14 +142,16 @@ export function PlayersPanel({
         {renderTeamColumn('blue', bluePlayers)}
       </View>
       
-      {spectators.length > 0 && (
+      {Array.isArray(spectators) && spectators.length > 0 ? (
          <View style={styles.spectatorsRow}>
             <Text style={styles.spectatorsLabel}>Spectators:</Text>
-            {spectators.map(p => (
-              <Text key={p.id} style={styles.spectatorName}>{p.name}</Text>
+            {spectators.filter(Boolean).map(p => (
+              p && p.id && p.name ? (
+                <Text key={p.id} style={styles.spectatorName}>{p.name}</Text>
+              ) : null
             ))}
          </View>
-      )}
+      ) : null}
     </View>
   );
 }

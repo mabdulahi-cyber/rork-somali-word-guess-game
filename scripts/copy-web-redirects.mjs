@@ -1,33 +1,25 @@
-import { existsSync, mkdirSync, copyFileSync, readdirSync } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { existsSync, mkdirSync, copyFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
-const publicDir = resolve('public');
+const from = resolve('public/_redirects');
 const toDir = resolve('dist');
+const to = resolve('dist/_redirects');
 
 try {
+  if (!existsSync(from)) {
+    console.log('[copy-web-redirects] No public/_redirects found; skipping');
+    process.exit(0);
+  }
+
   if (!existsSync(toDir)) {
-    console.log('[copy-web-assets] dist/ does not exist; skipping');
+    console.log('[copy-web-redirects] dist/ does not exist; skipping');
     process.exit(0);
   }
 
   mkdirSync(toDir, { recursive: true });
-
-  const filesToCopy = ['_redirects'];
-  
-  for (const file of filesToCopy) {
-    const from = resolve(publicDir, file);
-    const to = resolve(toDir, file);
-    
-    if (existsSync(from)) {
-      copyFileSync(from, to);
-      console.log('[copy-web-assets] Copied', file);
-    } else {
-      console.log('[copy-web-assets] File not found, skipping:', file);
-    }
-  }
-
-  console.log('[copy-web-assets] Done copying web assets');
+  copyFileSync(from, to);
+  console.log('[copy-web-redirects] Copied', { from, to });
 } catch (error) {
-  console.error('[copy-web-assets] Failed to copy assets', error);
+  console.error('[copy-web-redirects] Failed to copy redirects', error);
   process.exit(1);
 }

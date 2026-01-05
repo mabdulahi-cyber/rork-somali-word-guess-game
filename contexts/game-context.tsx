@@ -174,7 +174,19 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       });
 
       const playersData = await db.getPlayersByRoom(code);
-      console.log('[GameContext] fetchSnapshot - players received:', playersData.length);
+      console.log('[GameContext] fetchSnapshot - players received:', Array.isArray(playersData) ? playersData.length : 0);
+
+      if (!Array.isArray(playersData)) {
+        console.warn('[GameContext] fetchSnapshot - playersData is not an array, using empty array');
+        setRoomState(null);
+        return;
+      }
+
+      if (!Array.isArray(roomData.words) || !Array.isArray(roomData.key_map) || !Array.isArray(roomData.revealed)) {
+        console.warn('[GameContext] fetchSnapshot - invalid room data arrays');
+        setRoomState(null);
+        return;
+      }
 
       const cards = roomData.words.map((word: string, index: number) => ({
         id: `card-${index}`,
@@ -188,39 +200,39 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       const blueCardsLeft = cards.filter(c => c.type === 'blue' && !c.revealed).length;
 
       const spymasters = {
-        red: playersData.find((p: any) => p.team === 'red' && p.role === 'spymaster')?.id || null,
-        blue: playersData.find((p: any) => p.team === 'blue' && p.role === 'spymaster')?.id || null,
+        red: playersData.filter(Boolean).find((p: any) => p && p.team === 'red' && p.role === 'spymaster')?.id || null,
+        blue: playersData.filter(Boolean).find((p: any) => p && p.team === 'blue' && p.role === 'spymaster')?.id || null,
       };
 
       const newState: RoomState = {
-        roomCode: roomData.code,
+        roomCode: String(roomData.code || code),
         cards,
-        currentTeam: roomData.turn_team as Team,
+        currentTeam: (roomData.turn_team as Team) || 'red',
         redCardsLeft,
         blueCardsLeft,
         winner: roomData.game_status === 'ENDED' ? 
           (roomData.winner_team as Team | 'assassinated') : null, // Assuming winner_team column or derived
         gameStarted: true,
         currentHint: (roomData.hint_word && typeof roomData.hint_number === 'number') ? {
-          word: roomData.hint_word,
-          number: roomData.hint_number,
-          team: roomData.turn_team as Team,
+          word: String(roomData.hint_word),
+          number: Number(roomData.hint_number),
+          team: (roomData.turn_team as Team) || 'red',
         } : null,
         hintHistory: [], // Not implementing history for now unless we add a table for it
         turn: {
-          turnTeam: roomData.turn_team as Team,
-          status: roomData.turn_status as 'WAITING_HINT' | 'GUESSING',
-          hintWord: roomData.hint_word ?? null,
-          hintNumber: roomData.hint_number ?? null,
-          guessesLeft: roomData.guesses_left,
+          turnTeam: (roomData.turn_team as Team) || 'red',
+          status: (roomData.turn_status as 'WAITING_HINT' | 'GUESSING') || 'WAITING_HINT',
+          hintWord: roomData.hint_word ? String(roomData.hint_word) : null,
+          hintNumber: typeof roomData.hint_number === 'number' ? roomData.hint_number : null,
+          guessesLeft: typeof roomData.guesses_left === 'number' ? roomData.guesses_left : 0,
         },
-        version: roomData.version,
+        version: typeof roomData.version === 'number' ? roomData.version : 0,
         lastEvent: null,
-        players: playersData.map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          team: p.team,
-          role: p.role,
+        players: playersData.filter(Boolean).map((p: any) => ({
+          id: p?.id || 'unknown',
+          name: p?.name || 'Unknown',
+          team: p?.team || null,
+          role: p?.role || 'guesser',
           micMuted: true, // Not synced yet
         })),
         redSpymasterId: spymasters.red,

@@ -166,18 +166,20 @@ export default function LobbyScreen() {
       return null;
     }
 
+    const safePlayers = Array.isArray(roomState.players) ? roomState.players.filter(Boolean) : [];
+
     return (
       <View style={styles.playerListContainer}>
         <View style={styles.playerListHeader}>
           <Users size={18} color="#ffd369" />
           <Text style={styles.playerListTitle}>Players</Text>
         </View>
-        {roomState.players.length === 0 ? (
+        {safePlayers.length === 0 ? (
           <Text style={styles.emptyStateText}>No players yet.</Text>
         ) : (
-          roomState.players.map((player) => (
+          safePlayers.filter(p => p && p.id && p.name).map((player) => (
             <View
-              key={player.id}
+              key={player.id || `player-${Math.random()}`}
               style={[
                 styles.playerRow,
                 player.role === 'spymaster' && styles.playerRowSpymaster,
@@ -196,7 +198,7 @@ export default function LobbyScreen() {
                   },
                 ]}
               />
-              <Text style={styles.playerNameText}>{player.name}</Text>
+              <Text style={styles.playerNameText}>{String(player.name || 'Unknown')}</Text>
               {player.role === 'spymaster' && (
                 <View style={styles.playerBadge}>
                   <Shield size={14} color="#16213e" />
@@ -283,7 +285,9 @@ export default function LobbyScreen() {
           autoFocus
         />
 
-        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+        {errorMessage && typeof errorMessage === 'string' ? (
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        ) : null}
 
         <Pressable
           testID="submit-create-button"
@@ -340,7 +344,9 @@ export default function LobbyScreen() {
           onChangeText={setJoinCode}
         />
 
-        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+        {errorMessage && typeof errorMessage === 'string' ? (
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        ) : null}
 
         <Pressable
           testID="submit-join-button"
@@ -369,17 +375,17 @@ export default function LobbyScreen() {
         <Text style={styles.subtitle}>Prepare your team</Text>
       </View>
 
-      {errorMessage ? (
+      {errorMessage && typeof errorMessage === 'string' ? (
         <View style={styles.formCard}>
           <Text style={styles.errorText}>{errorMessage}</Text>
         </View>
       ) : null}
 
-      {roomCode ? (
+      {roomCode && typeof roomCode === 'string' ? (
         <View style={styles.formCard}>
           <Text style={styles.cardTitle}>Room Code</Text>
           <View style={styles.roomCodeContainer}>
-            <Text style={styles.roomCodeText}>{roomCode}</Text>
+            <Text style={styles.roomCodeText}>{String(roomCode)}</Text>
             <Pressable
               testID="copy-room-code-button"
               style={({ pressed }) => [
@@ -455,13 +461,13 @@ export default function LobbyScreen() {
             <Text style={styles.enterGameText}>Enter Game</Text>
           </Pressable>
 
-          {!canEnterGame ? (
+          {!canEnterGame && currentPlayer ? (
             <Text style={styles.errorText}>
               {!currentPlayer?.name?.trim()
                 ? 'Enter your name to continue'
                 : !currentPlayer?.team
                 ? 'Pick a team to continue'
-                : ''}
+                : 'Complete setup to continue'}
             </Text>
           ) : null}
 

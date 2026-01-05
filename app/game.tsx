@@ -294,13 +294,16 @@ export default function GameScreen() {
     if (!roomState || !roomState.winner) return null;
 
     const isAssassinated = roomState.winner === 'assassinated';
+    const currentTeam = roomState.currentTeam || 'red';
     const winningTeam = isAssassinated
-      ? roomState.currentTeam === 'red'
+      ? currentTeam === 'red'
         ? 'blue'
         : 'red'
       : roomState.winner;
 
     const winnerColor = winningTeam === 'red' ? '#DC2626' : '#2563EB';
+    const winnerTeamName = typeof winningTeam === 'string' ? winningTeam.toUpperCase() : 'UNKNOWN';
+    const currentTeamName = typeof currentTeam === 'string' ? currentTeam.toUpperCase() : 'UNKNOWN';
 
     return (
       <View style={styles.modal}>
@@ -309,12 +312,12 @@ export default function GameScreen() {
             {isAssassinated ? '💀' : '🎉'}
           </Text>
           <Text style={[styles.modalTitle, { color: winnerColor }]}>
-            {isAssassinated ? 'Assassin!' : `${winningTeam?.toUpperCase()} Wins!`}
+            {isAssassinated ? 'Assassin!' : `${winnerTeamName} Wins!`}
           </Text>
           <Text style={styles.modalText}>
             {isAssassinated
-              ? `${roomState.currentTeam.toUpperCase()} team hit the assassin!`
-              : `Congratulations to ${winningTeam?.toUpperCase()} team!`}
+              ? `${currentTeamName} team hit the assassin!`
+              : `Congratulations to ${winnerTeamName} team!`}
           </Text>
           <Pressable onPress={handleNewGame} style={styles.modalButton} testID="reset-game-button">
             <LinearGradient
@@ -386,7 +389,10 @@ export default function GameScreen() {
     );
   }
 
-  const turnTeamColor = roomState.turn.turnTeam === 'red' ? '#DC2626' : '#2563EB';
+  const turnTeamColor = roomState.turn?.turnTeam === 'red' ? '#DC2626' : '#2563EB';
+  const turnTeamName = roomState.turn?.turnTeam ? roomState.turn.turnTeam.toUpperCase() : 'UNKNOWN';
+  const turnStatus = roomState.turn?.status || 'WAITING_HINT';
+  const guessesLeft = roomState.turn?.guessesLeft ?? 0;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -414,16 +420,16 @@ export default function GameScreen() {
             <Text style={styles.turnBannerText}>
               {roomState.winner 
                 ? 'Game Over' 
-                : `${roomState.turn.turnTeam.toUpperCase()} TEAM'S TURN`}
+                : `${turnTeamName} TEAM'S TURN`}
             </Text>
-            {!roomState.winner && roomState.turn.status === 'WAITING_HINT' && (
+            {!roomState.winner && turnStatus === 'WAITING_HINT' && (
               <Text style={styles.turnSubtext}>Waiting for hint...</Text>
             )}
-            {!roomState.winner && roomState.turn.status === 'GUESSING' && (
+            {!roomState.winner && turnStatus === 'GUESSING' && (
               <Text style={styles.turnSubtext}>
-                {roomState.turn.guessesLeft === 999 
+                {guessesLeft === 999 
                   ? 'Unlimited guesses' 
-                  : `${roomState.turn.guessesLeft} guesses left`}
+                  : `${guessesLeft} guesses left`}
               </Text>
             )}
           </View>
@@ -463,19 +469,21 @@ export default function GameScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={[styles.gridContainer, { width: boardWidth }]}>
-            {roomState.cards.map((card) => (
-              <WordCard
-                key={card.id}
-                card={card}
-                onPress={() => handleCardPress(card.id)}
-                disabled={card.revealed || !canGuess}
-                cardSize={cardSize}
-                isSpymaster={isSpymaster}
-              />
-            ))}
+            {Array.isArray(roomState.cards) && roomState.cards.length > 0 ? (
+              roomState.cards.filter(card => card && card.id && card.word).map((card) => (
+                <WordCard
+                  key={card.id}
+                  card={card}
+                  onPress={() => handleCardPress(card.id)}
+                  disabled={card.revealed || !canGuess}
+                  cardSize={cardSize}
+                  isSpymaster={isSpymaster}
+                />
+              ))
+            ) : null}
           </View>
 
-          {!roomState.winner && roomState.turn.status === 'GUESSING' && canEndTurn && (
+          {!roomState.winner && turnStatus === 'GUESSING' && canEndTurn ? (
             <Pressable
               onPress={handleEndTurn}
               style={[styles.endTurnButton, { maxWidth: boardWidth }]}
@@ -483,10 +491,10 @@ export default function GameScreen() {
             >
               <Text style={styles.endTurnText}>End Turn</Text>
             </Pressable>
-          )}
+          ) : null}
 
           <PlayersPanel
-            players={roomState.players}
+            players={Array.isArray(roomState.players) ? roomState.players : []}
             currentPlayerId={currentPlayer?.id || ''}
             onSwitchTeam={handleSwitchTeam}
             onChangeRole={handleChangeRole}
@@ -544,14 +552,16 @@ export default function GameScreen() {
               </View>
             ) : (
               <Text style={styles.hintPanelInfo}>
-                {isSpymaster && roomState.turn.turnTeam !== currentPlayer?.team
+                {isSpymaster && roomState.turn?.turnTeam !== currentPlayer?.team
                   ? "Wait for your team's turn"
-                  : isSpymaster && roomState.turn.status === 'GUESSING'
+                  : isSpymaster && turnStatus === 'GUESSING'
                   ? 'Your team is guessing...'
                   : 'Only the spymaster can give hints'}
               </Text>
             )}
-            {hintError ? <Text style={styles.hintError}>{hintError}</Text> : null}
+            {hintError && typeof hintError === 'string' ? (
+              <Text style={styles.hintError}>{hintError}</Text>
+            ) : null}
           </View>
         )}
 
