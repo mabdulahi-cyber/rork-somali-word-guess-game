@@ -391,10 +391,10 @@ export default function GameScreen() {
     );
   }
 
-  const turnTeamColor = roomState.turn?.turnTeam === 'red' ? '#DC2626' : '#2563EB';
-  const turnTeamName = roomState.turn?.turnTeam ? roomState.turn.turnTeam.toUpperCase() : 'UNKNOWN';
-  const turnStatus = roomState.turn?.status || 'WAITING_HINT';
-  const guessesLeft = roomState.turn?.guessesLeft ?? 0;
+  const turnTeamColor = roomState?.turn?.turnTeam === 'red' ? '#DC2626' : '#2563EB';
+  const turnTeamName = roomState?.turn?.turnTeam ? String(roomState.turn.turnTeam).toUpperCase() : 'UNKNOWN';
+  const turnStatus = roomState?.turn?.status || 'WAITING_HINT';
+  const guessesLeft = roomState?.turn?.guessesLeft ?? 0;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -410,7 +410,7 @@ export default function GameScreen() {
 
             <View style={styles.roomInfo}>
               <Text style={styles.roomCodeLabel}>Room</Text>
-              <Text style={styles.roomCodeValue}>{roomState.roomCode}</Text>
+              <Text style={styles.roomCodeValue}>{roomState?.roomCode || '---'}</Text>
             </View>
 
             <Pressable onPress={handleNewGame} style={styles.iconButton} testID="reset-board-button">
@@ -420,14 +420,14 @@ export default function GameScreen() {
 
           <View style={[styles.turnBanner, { backgroundColor: turnTeamColor }]}>
             <Text style={styles.turnBannerText}>
-              {roomState.winner 
+              {roomState?.winner 
                 ? 'Game Over' 
                 : `${turnTeamName} TEAM'S TURN`}
             </Text>
-            {!roomState.winner && turnStatus === 'WAITING_HINT' && (
+            {!roomState?.winner && turnStatus === 'WAITING_HINT' && (
               <Text style={styles.turnSubtext}>Waiting for hint...</Text>
             )}
-            {!roomState.winner && turnStatus === 'GUESSING' && (
+            {!roomState?.winner && turnStatus === 'GUESSING' && (
               <Text style={styles.turnSubtext}>
                 {guessesLeft === 999 
                   ? 'Unlimited guesses' 
@@ -438,11 +438,11 @@ export default function GameScreen() {
 
           <View style={styles.scoreRow}>
             <View style={[styles.scoreBox, { backgroundColor: '#DC2626' }]}>
-              <Text style={styles.scoreNumber}>{roomState.redCardsLeft}</Text>
+              <Text style={styles.scoreNumber}>{roomState?.redCardsLeft ?? 0}</Text>
               <Text style={styles.scoreLabel}>RED</Text>
             </View>
             
-            {roomState.currentHint && (
+            {roomState?.currentHint && (
               <View style={styles.hintBox}>
                 <Text style={styles.hintLabel}>HINT</Text>
                 <Text style={styles.hintWord}>&quot;{roomState.currentHint.word}&quot;</Text>
@@ -451,7 +451,7 @@ export default function GameScreen() {
             )}
             
             <View style={[styles.scoreBox, { backgroundColor: '#2563EB' }]}>
-              <Text style={styles.scoreNumber}>{roomState.blueCardsLeft}</Text>
+              <Text style={styles.scoreNumber}>{roomState?.blueCardsLeft ?? 0}</Text>
               <Text style={styles.scoreLabel}>BLUE</Text>
             </View>
           </View>
@@ -471,9 +471,9 @@ export default function GameScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={[styles.gridContainer, { width: boardWidth }]}>
-            {Array.isArray(roomState.cards) && roomState.cards.length > 0 ? (
+            {roomState && Array.isArray(roomState.cards) && roomState.cards.length > 0 ? (
               roomState.cards
-                .filter(card => card && card.id && card.word && card.type)
+                .filter(card => card && typeof card === 'object' && card.id && card.word && card.type)
                 .map((card) => {
                   if (!card || !card.id) return null;
                   return (
@@ -481,9 +481,9 @@ export default function GameScreen() {
                       key={card.id}
                       card={card}
                       onPress={() => handleCardPress(card.id)}
-                      disabled={card.revealed || !canGuess}
+                      disabled={Boolean(card.revealed || !canGuess)}
                       cardSize={cardSize}
-                      isSpymaster={isSpymaster}
+                      isSpymaster={Boolean(isSpymaster)}
                     />
                   );
                 })
@@ -491,7 +491,7 @@ export default function GameScreen() {
             ) : null}
           </View>
 
-          {!roomState.winner && turnStatus === 'GUESSING' && canEndTurn ? (
+          {!roomState?.winner && turnStatus === 'GUESSING' && canEndTurn ? (
             <Pressable
               onPress={handleEndTurn}
               style={[styles.endTurnButton, { maxWidth: boardWidth }]}
@@ -502,14 +502,14 @@ export default function GameScreen() {
           ) : null}
 
           <PlayersPanel
-            players={Array.isArray(roomState.players) ? roomState.players : []}
+            players={Array.isArray(roomState?.players) ? roomState.players : []}
             currentPlayerId={currentPlayer?.id || ''}
             onSwitchTeam={handleSwitchTeam}
             onChangeRole={handleChangeRole}
           />
         </ScrollView>
 
-        {!roomState.winner && (
+        {!roomState?.winner && (
           <View style={styles.hintPanel}>
             <View style={styles.hintPanelHeader}>
               <Eye size={16} color="#ffd369" />
@@ -524,9 +524,9 @@ export default function GameScreen() {
                     style={styles.textInput}
                     placeholder="One word hint..."
                     placeholderTextColor="#666"
-                    value={hintWord}
+                    value={hintWord || ''}
                     onChangeText={(text) => {
-                      setHintWord(text);
+                      setHintWord(text || '');
                       if (hintError) setHintError('');
                     }}
                     autoCapitalize="none"

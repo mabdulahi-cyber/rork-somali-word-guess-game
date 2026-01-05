@@ -1,5 +1,5 @@
 [build]
-  command = "rm -rf node_modules/.cache dist && npm ci && npm run build && node ./scripts/copy-web-redirects.mjs"
+  command = "rm -rf node_modules/.cache dist && npm install && npm run build && node ./scripts/copy-web-redirects.mjs"
   publish = "dist"
   functions = "netlify/functions"
 

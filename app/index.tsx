@@ -280,7 +280,7 @@ export default function LobbyScreen() {
           style={styles.input}
           placeholder="Enter your player name"
           placeholderTextColor="#8087a2"
-          value={playerName}
+          value={playerName || ''}
           onChangeText={setPlayerName}
           autoFocus
         />
@@ -328,7 +328,7 @@ export default function LobbyScreen() {
           style={styles.input}
           placeholder="Enter your player name"
           placeholderTextColor="#8087a2"
-          value={playerName}
+          value={playerName || ''}
           onChangeText={setPlayerName}
           autoFocus
         />
@@ -340,7 +340,7 @@ export default function LobbyScreen() {
           placeholder="Enter room code"
           placeholderTextColor="#8087a2"
           autoCapitalize="characters"
-          value={joinCode}
+          value={joinCode || ''}
           onChangeText={setJoinCode}
         />
 

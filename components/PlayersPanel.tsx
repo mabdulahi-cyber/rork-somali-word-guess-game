@@ -140,8 +140,8 @@ export function PlayersPanel({
   return (
     <View style={styles.container}>
       <View style={styles.teamsContainer}>
-        {renderTeamColumn('red', redPlayers)}
-        {renderTeamColumn('blue', bluePlayers)}
+        {renderTeamColumn('red', redPlayers || [])}
+        {renderTeamColumn('blue', bluePlayers || [])}
       </View>
       
       {Array.isArray(spectators) && spectators.length > 0 ? (
