@@ -60,10 +60,12 @@ export default function LobbyScreen() {
     try {
       setIsSubmitting(true);
       setErrorMessage('');
-      console.log('[LobbyScreen] Joining room:', joinCode);
-      await joinRoom(playerName, joinCode);
-      console.log('[LobbyScreen] Room joined successfully');
-      setFlowState('lobby');
+      const trimmedCode = joinCode.trim().toUpperCase();
+      console.log('[LobbyScreen] Joining room:', trimmedCode);
+      await joinRoom(playerName, trimmedCode);
+      console.log('[LobbyScreen] Room joined successfully, navigating to room');
+      // Navigate directly to the room after successful join
+      router.replace(`/room/${trimmedCode}`);
     } catch (error: any) {
       console.error('[LobbyScreen] Join room failed:', error);
       const errorMsg = error?.message || (typeof error === 'string' ? error : 'Unable to join room. Check console for details.');
