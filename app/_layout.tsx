@@ -12,12 +12,35 @@ if (Platform.OS !== 'web') {
 if (Platform.OS === 'web' && typeof window !== 'undefined') {
   window.onerror = function(message, source, lineno, colno, error) {
     console.error('[Global Error]', { message, source, lineno, colno, error });
+    const root = document.getElementById('root');
+    if (root && root.children.length === 0) {
+      root.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#1a1a2e;color:#fff;font-family:system-ui;padding:20px;text-align:center;">
+          <h1 style="color:#ff6b6b;margin-bottom:16px;">App Error</h1>
+          <p style="color:#c0c4d6;margin-bottom:8px;">${String(message)}</p>
+          <button onclick="location.reload()" style="margin-top:20px;padding:12px 24px;background:#ffd369;color:#1a1a2e;border:none;border-radius:8px;font-weight:bold;cursor:pointer;">Reload</button>
+        </div>
+      `;
+    }
     return false;
   };
   
   window.onunhandledrejection = function(event) {
     console.error('[Unhandled Promise Rejection]', event.reason);
   };
+
+  setTimeout(() => {
+    const root = document.getElementById('root');
+    if (root && root.children.length === 0) {
+      root.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#1a1a2e;color:#fff;font-family:system-ui;padding:20px;text-align:center;">
+          <h1 style="color:#ffd369;margin-bottom:16px;">Loading...</h1>
+          <p style="color:#c0c4d6;">If this takes too long, try refreshing the page.</p>
+          <button onclick="location.reload()" style="margin-top:20px;padding:12px 24px;background:#ffd369;color:#1a1a2e;border:none;border-radius:8px;font-weight:bold;cursor:pointer;">Refresh</button>
+        </div>
+      `;
+    }
+  }, 5000);
 }
 
 
