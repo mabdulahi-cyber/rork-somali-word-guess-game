@@ -5,6 +5,8 @@ import * as SplashScreen from "expo-splash-screen";
 import { AppErrorBoundary } from "@/components/ErrorBoundary";
 import { GameProvider } from "@/contexts/game-context";
 
+const BUILD_VERSION = `${new Date().toISOString()}`;
+
 if (Platform.OS !== 'web') {
   LogBox.ignoreLogs(['Setting a timer']);
 }
@@ -41,6 +43,7 @@ export default function RootLayout() {
   useEffect(() => {
     setMounted(true);
     console.log('[RootLayout] Component mounted, Platform:', Platform.OS);
+    console.log('[RootLayout] Build version:', BUILD_VERSION);
   }, []);
 
   useEffect(() => {

@@ -21,7 +21,7 @@ export function PlayersPanel({
   const bluePlayers = safePlayers.filter((p) => p && p.team === 'blue');
   const spectators = safePlayers.filter((p) => p && !p.team);
 
-  const currentPlayer = safePlayers.find((p) => p && p.id === currentPlayerId);
+  const currentPlayer = safePlayers.find((p) => p && p.id === currentPlayerId) || null;
 
   const renderPlayerItem = (player: Player) => {
     if (!player || !player.id || !player.name) return null;
@@ -63,10 +63,12 @@ export function PlayersPanel({
   };
 
   const renderTeamColumn = (team: Team, teamPlayers: Player[]) => {
+    if (!team || !Array.isArray(teamPlayers)) return null;
+    
     const isRed = team === 'red';
     const teamColor = isRed ? '#ff6b6b' : '#4ecdc4';
     const teamName = isRed ? 'Red Team' : 'Blue Team';
-    const spymaster = teamPlayers.find(p => p.role === 'spymaster');
+    const spymaster = teamPlayers.filter(Boolean).find(p => p && p.role === 'spymaster');
 
     // Logic for role switching
     const isMyTeam = currentPlayer?.team === team;
@@ -81,7 +83,7 @@ export function PlayersPanel({
         
         <ScrollView style={styles.teamList} nestedScrollEnabled>
           {Array.isArray(teamPlayers) && teamPlayers.length > 0 ? (
-            teamPlayers.filter(Boolean).map(renderPlayerItem)
+            teamPlayers.filter(Boolean).map(renderPlayerItem).filter(Boolean)
           ) : (
             <Text style={styles.emptyTeamText}>No players</Text>
           )}

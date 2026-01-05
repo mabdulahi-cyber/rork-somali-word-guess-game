@@ -301,9 +301,11 @@ export default function GameScreen() {
         : 'red'
       : roomState.winner;
 
+    if (!winningTeam || typeof winningTeam !== 'string') return null;
+    
     const winnerColor = winningTeam === 'red' ? '#DC2626' : '#2563EB';
-    const winnerTeamName = typeof winningTeam === 'string' ? winningTeam.toUpperCase() : 'UNKNOWN';
-    const currentTeamName = typeof currentTeam === 'string' ? currentTeam.toUpperCase() : 'UNKNOWN';
+    const winnerTeamName = winningTeam.toUpperCase();
+    const currentTeamName = currentTeam.toUpperCase();
 
     return (
       <View style={styles.modal}>
@@ -470,16 +472,22 @@ export default function GameScreen() {
         >
           <View style={[styles.gridContainer, { width: boardWidth }]}>
             {Array.isArray(roomState.cards) && roomState.cards.length > 0 ? (
-              roomState.cards.filter(card => card && card.id && card.word).map((card) => (
-                <WordCard
-                  key={card.id}
-                  card={card}
-                  onPress={() => handleCardPress(card.id)}
-                  disabled={card.revealed || !canGuess}
-                  cardSize={cardSize}
-                  isSpymaster={isSpymaster}
-                />
-              ))
+              roomState.cards
+                .filter(card => card && card.id && card.word && card.type)
+                .map((card) => {
+                  if (!card || !card.id) return null;
+                  return (
+                    <WordCard
+                      key={card.id}
+                      card={card}
+                      onPress={() => handleCardPress(card.id)}
+                      disabled={card.revealed || !canGuess}
+                      cardSize={cardSize}
+                      isSpymaster={isSpymaster}
+                    />
+                  );
+                })
+                .filter(Boolean)
             ) : null}
           </View>
 

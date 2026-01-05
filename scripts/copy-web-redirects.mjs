@@ -5,6 +5,10 @@ const from = resolve('public/_redirects');
 const toDir = resolve('dist');
 const to = resolve('dist/_redirects');
 
+console.log('[copy-web-redirects] Starting copy operation');
+console.log('[copy-web-redirects] From:', from);
+console.log('[copy-web-redirects] To:', to);
+
 try {
   if (!existsSync(from)) {
     console.log('[copy-web-redirects] No public/_redirects found; skipping');
@@ -18,8 +22,9 @@ try {
 
   mkdirSync(toDir, { recursive: true });
   copyFileSync(from, to);
-  console.log('[copy-web-redirects] Copied', { from, to });
+  console.log('[copy-web-redirects] ✅ Successfully copied _redirects to dist/');
+  console.log('[copy-web-redirects] Build timestamp:', new Date().toISOString());
 } catch (error) {
-  console.error('[copy-web-redirects] Failed to copy redirects', error);
+  console.error('[copy-web-redirects] ❌ Failed to copy redirects', error);
   process.exit(1);
 }
