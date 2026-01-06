@@ -45,10 +45,8 @@ interface DBAdapter {
 
 const createRemoteDBAdapter = (): DBAdapter => {
   const getApiUrl = () => {
-    const baseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
-    if (!baseUrl) {
-      throw new Error('EXPO_PUBLIC_RORK_API_BASE_URL is not configured');
-    }
+    const baseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL || '/api';
+    console.log('[DB:remote] Using API URL:', baseUrl);
     return baseUrl.replace(/\/$/, '');
   };
 
