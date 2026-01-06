@@ -26,7 +26,7 @@ interface DBPlayer {
   room_code: string;
   name: string;
   team: Team | null;
-  role: 'spymaster' | 'guesser';
+  role: 'spymaster' | 'guesser' | 'spectator';
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
@@ -135,7 +135,7 @@ const createLocalDBAdapter = (): DBAdapter => {
         room_code: roomCode,
         name,
         team: null,
-        role: 'guesser',
+        role: 'spectator',
         is_active: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

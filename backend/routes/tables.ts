@@ -26,7 +26,7 @@ interface DBPlayer {
   room_code: string;
   name: string;
   team: string | null;
-  role: string;
+  role: 'spymaster' | 'guesser' | 'spectator';
   is_active: boolean;
   created_at?: string;
   updated_at?: string;

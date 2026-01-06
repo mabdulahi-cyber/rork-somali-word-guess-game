@@ -19,7 +19,7 @@ export function PlayersPanel({
   const safePlayers = Array.isArray(players) ? players.filter(Boolean) : [];
   const redPlayers = safePlayers.filter((p) => p && p.team === 'red');
   const bluePlayers = safePlayers.filter((p) => p && p.team === 'blue');
-  const spectators = safePlayers.filter((p) => p && !p.team);
+  const spectators = safePlayers.filter((p) => p && (!p.team || p.role === 'spectator'));
 
   const currentPlayer = safePlayers.find((p) => p && p.id === currentPlayerId) || null;
 
@@ -70,9 +70,9 @@ export function PlayersPanel({
     const teamName = isRed ? 'Red Team' : 'Blue Team';
     const spymaster = teamPlayers.filter(Boolean).find(p => p && p.role === 'spymaster');
 
-    // Logic for role switching
     const isMyTeam = currentPlayer?.team === team;
     const amISpymaster = currentPlayer?.role === 'spymaster' && isMyTeam;
+    const isSpectator = !currentPlayer?.team || currentPlayer?.role === 'spectator';
 
     return (
       <View style={[styles.teamColumn, { borderColor: `${teamColor}40` }]}>
@@ -90,7 +90,18 @@ export function PlayersPanel({
         </ScrollView>
 
         <View style={styles.teamActions}>
-          {!isMyTeam ? (
+          {isSpectator ? (
+             <Pressable
+              onPress={() => onSwitchTeam(team)}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: teamColor, backgroundColor: `${teamColor}15` },
+                pressed && { backgroundColor: `${teamColor}30` }
+              ]}
+            >
+              <Text style={[styles.actionButtonText, { color: teamColor }]}>Join {teamName}</Text>
+            </Pressable>
+          ) : !isMyTeam ? (
              <Pressable
               onPress={() => onSwitchTeam(team)}
               style={({ pressed }) => [
@@ -99,7 +110,7 @@ export function PlayersPanel({
                 pressed && { backgroundColor: `${teamColor}20` }
               ]}
             >
-              <Text style={[styles.actionButtonText, { color: teamColor }]}>Join {teamName}</Text>
+              <Text style={[styles.actionButtonText, { color: teamColor }]}>Switch to {teamName}</Text>
             </Pressable>
           ) : (
             <>
@@ -145,13 +156,28 @@ export function PlayersPanel({
       </View>
       
       {Array.isArray(spectators) && spectators.length > 0 ? (
-         <View style={styles.spectatorsRow}>
-            <Text style={styles.spectatorsLabel}>Spectators:</Text>
-            {spectators.filter(Boolean).map(p => (
-              p && p.id && p.name ? (
-                <Text key={p.id} style={styles.spectatorName}>{p.name}</Text>
-              ) : null
-            ))}
+         <View style={styles.spectatorsSection}>
+            <View style={styles.spectatorHeader}>
+              <User size={16} color="#888" />
+              <Text style={styles.spectatorsLabel}>Spectators ({spectators.length})</Text>
+            </View>
+            <View style={styles.spectatorsRow}>
+              {spectators.filter(Boolean).map(p => (
+                p && p.id && p.name ? (
+                  <View key={p.id} style={[
+                    styles.spectatorChip,
+                    p.id === currentPlayerId && styles.spectatorChipMe
+                  ]}>
+                    <Text style={[
+                      styles.spectatorName,
+                      p.id === currentPlayerId && styles.spectatorNameMe
+                    ]}>
+                      {p.name}{p.id === currentPlayerId ? ' (You)' : ''}
+                    </Text>
+                  </View>
+                ) : null
+              ))}
+            </View>
          </View>
       ) : null}
     </View>
@@ -298,23 +324,51 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  spectatorsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+  spectatorsSection: {
     marginTop: 12,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  spectatorHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
   },
   spectatorsLabel: {
     color: '#888',
     fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  spectatorsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  spectatorChip: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  spectatorChipMe: {
+    backgroundColor: 'rgba(255, 211, 105, 0.15)',
+    borderColor: 'rgba(255, 211, 105, 0.3)',
   },
   spectatorName: {
     color: '#aaa',
-    fontSize: 12,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  spectatorNameMe: {
+    color: '#ffd369',
+    fontWeight: '600',
   },
 });

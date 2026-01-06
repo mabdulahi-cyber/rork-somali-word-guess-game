@@ -40,7 +40,7 @@ export interface GameState {
   lastEvent: string | null;
 }
 
-export type Role = 'spymaster' | 'guesser';
+export type Role = 'spymaster' | 'guesser' | 'spectator';
 
 export interface Player {
   id: string;

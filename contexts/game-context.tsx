@@ -30,7 +30,7 @@ interface GameContextValue {
   currentPlayer: Player | null;
   isRoomLoading: boolean;
   isInitializing: boolean;
-  createRoom: (name: string) => Promise<void>;
+  createRoom: (name: string) => Promise<string>;
   joinRoom: (name: string, code: string) => Promise<void>;
   selectTeam: (team: Team) => Promise<void>;
   setRole: (role: Role) => Promise<void>;
@@ -232,8 +232,8 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
           id: p?.id || 'unknown',
           name: p?.name || 'Unknown',
           team: p?.team || null,
-          role: p?.role || 'guesser',
-          micMuted: true, // Not synced yet
+          role: p?.role || 'spectator',
+          micMuted: true,
         })),
         redSpymasterId: spymasters.red,
         blueSpymasterId: spymasters.blue,
@@ -323,7 +323,7 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
           room_code: code,
           name: trimmedName,
           team: null,
-          role: 'guesser',
+          role: 'spectator',
           is_active: true,
         });
       } else {
@@ -337,6 +337,7 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
       await fetchSnapshot(code);
 
       console.log('[GameContext] createRoom - SUCCESS', { code, playerId });
+      return code;
     } catch (error) {
       console.error('[GameContext] createRoom - FAILED');
       console.error('[GameContext] createRoom error details:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
@@ -390,6 +391,7 @@ export const [GameProvider, useGame] = createContextHook<GameContextValue>(() =>
   const selectTeam = useCallback(async (team: Team) => {
     if (!roomCode || !playerId) return;
     
+    console.log('[GameContext] selectTeam - moving player to team:', team);
     await db.updatePlayer(playerId, { team, role: 'guesser' });
   }, [roomCode, playerId]);
 

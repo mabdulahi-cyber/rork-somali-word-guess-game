@@ -44,9 +44,9 @@ export default function LobbyScreen() {
       setIsSubmitting(true);
       setErrorMessage('');
       console.log('[LobbyScreen] Creating room for player:', playerName);
-      await createRoom(playerName);
-      console.log('[LobbyScreen] Room created successfully');
-      setFlowState('lobby');
+      const createdCode = await createRoom(playerName);
+      console.log('[LobbyScreen] Room created successfully, navigating to room:', createdCode);
+      router.replace(`/room/${createdCode}`);
     } catch (error: any) {
       console.error('[LobbyScreen] Create room failed:', error);
       const errorMsg = error?.message || (typeof error === 'string' ? error : 'Unable to create room. Check console for details.');
