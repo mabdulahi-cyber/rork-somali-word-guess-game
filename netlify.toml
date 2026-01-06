@@ -8,6 +8,10 @@
   NPM_FLAGS = "--legacy-peer-deps"
   CI = "true"
 
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["surrealdb", "surrealdb.js"]
+
 [[headers]]
   for = "/*"
   [headers.values]
