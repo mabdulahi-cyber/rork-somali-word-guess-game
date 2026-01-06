@@ -3,13 +3,20 @@ const getConfig = () => {
   const namespace = process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE;
   const token = process.env.EXPO_PUBLIC_RORK_DB_TOKEN;
 
+  console.log('[Backend:DB] Environment check:', {
+    hasEndpoint: !!endpoint,
+    hasNamespace: !!namespace,
+    hasToken: !!token,
+    nodeEnv: process.env.NODE_ENV,
+  });
+
   if (!endpoint || !namespace || !token) {
     console.error('[Backend:DB] Missing configuration:', { 
       hasEndpoint: !!endpoint, 
       hasNamespace: !!namespace, 
       hasToken: !!token 
     });
-    throw new Error('Missing database configuration: EXPO_PUBLIC_RORK_DB_ENDPOINT, EXPO_PUBLIC_RORK_DB_NAMESPACE, or EXPO_PUBLIC_RORK_DB_TOKEN');
+    throw new Error('Database not configured. This app requires Rork system environment variables and cannot run in external deployments like Netlify.');
   }
 
   return { endpoint, namespace, token };

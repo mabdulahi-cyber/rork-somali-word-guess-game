@@ -38,6 +38,12 @@ app.post('/rooms/:id', async (c) => {
   
   try {
     console.log('[Backend] Creating room:', id);
+    console.log('[Backend] Environment:', {
+      hasDbEndpoint: !!process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT,
+      hasDbNamespace: !!process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE,
+      hasDbToken: !!process.env.EXPO_PUBLIC_RORK_DB_TOKEN,
+    });
+    
     const escapedId = id.replace(/'/g, "\\'");
     const result = await queryDB<DBRoom>(
       `CREATE rooms:⟨${escapedId}⟩ CONTENT $data RETURN AFTER`,
@@ -48,7 +54,10 @@ app.post('/rooms/:id', async (c) => {
     return c.json(result[0] || body);
   } catch (error: any) {
     console.error('[Backend] Create room error:', error);
-    return c.json({ error: error.message }, 500);
+    return c.json({ 
+      error: error.message,
+      details: 'This app requires Rork system environment variables. Please run in Rork preview, not external deployments.'
+    }, 500);
   }
 });
 
