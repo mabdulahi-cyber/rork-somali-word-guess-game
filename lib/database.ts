@@ -1,5 +1,4 @@
 import type { CardType, Team } from '@/types/game';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface DBRoom {
   [key: string]: unknown;
@@ -44,49 +43,18 @@ interface DBAdapter {
   deletePlayer: (id: string) => Promise<void>;
 }
 
-const createLocalDBAdapter = (): DBAdapter => {
-  const ROOMS_KEY = 'somali-codenames.rooms';
-  const PLAYERS_KEY = 'somali-codenames.players';
-
-  const loadRooms = async (): Promise<Record<string, DBRoom>> => {
-    try {
-      const data = await AsyncStorage.getItem(ROOMS_KEY);
-      return data ? JSON.parse(data) : {};
-    } catch (error) {
-      console.error('[DB:local] Failed to load rooms', error);
-      return {};
+const createRemoteDBAdapter = (): DBAdapter => {
+  const getApiUrl = () => {
+    const baseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+    if (!baseUrl) {
+      throw new Error('EXPO_PUBLIC_RORK_API_BASE_URL is not configured');
     }
-  };
-
-  const saveRooms = async (rooms: Record<string, DBRoom>): Promise<void> => {
-    try {
-      await AsyncStorage.setItem(ROOMS_KEY, JSON.stringify(rooms));
-    } catch (error) {
-      console.error('[DB:local] Failed to save rooms', error);
-    }
-  };
-
-  const loadPlayers = async (): Promise<Record<string, DBPlayer>> => {
-    try {
-      const data = await AsyncStorage.getItem(PLAYERS_KEY);
-      return data ? JSON.parse(data) : {};
-    } catch (error) {
-      console.error('[DB:local] Failed to load players', error);
-      return {};
-    }
-  };
-
-  const savePlayers = async (players: Record<string, DBPlayer>): Promise<void> => {
-    try {
-      await AsyncStorage.setItem(PLAYERS_KEY, JSON.stringify(players));
-    } catch (error) {
-      console.error('[DB:local] Failed to save players', error);
-    }
+    return baseUrl.replace(/\/$/, '');
   };
 
   const adapter: DBAdapter = {
     async createRoom(code, words, keyMap, startingTeam) {
-      const rooms = await loadRooms();
+      const apiUrl = getApiUrl();
       const roomData: DBRoom = {
         code,
         words,
@@ -97,39 +65,72 @@ const createLocalDBAdapter = (): DBAdapter => {
         game_status: 'PLAYING',
         guesses_left: 0,
         version: 1,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       };
-      rooms[code] = roomData;
-      await saveRooms(rooms);
-      console.log('[DB:local] createRoom', { code });
-      return roomData;
+
+      console.log('[DB:remote] createRoom', { code, apiUrl });
+      const response = await fetch(`${apiUrl}/tables/rooms/${code}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(roomData),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('[DB:remote] createRoom failed:', response.status, error);
+        throw new Error(`Failed to create room: ${error}`);
+      }
+
+      const result = await response.json();
+      console.log('[DB:remote] createRoom success');
+      return result;
     },
 
     async getRoom(code) {
-      const rooms = await loadRooms();
-      const room = rooms[code] || null;
-      console.log('[DB:local] getRoom', { code, found: Boolean(room) });
-      return room;
+      const apiUrl = getApiUrl();
+      console.log('[DB:remote] getRoom', { code, apiUrl });
+      
+      const response = await fetch(`${apiUrl}/tables/rooms/${code}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (response.status === 404) {
+        console.log('[DB:remote] getRoom - room not found');
+        return null;
+      }
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('[DB:remote] getRoom failed:', response.status, error);
+        throw new Error(`Failed to get room: ${error}`);
+      }
+
+      const result = await response.json();
+      console.log('[DB:remote] getRoom success');
+      return result;
     },
 
     async updateRoom(code, updates) {
-      const rooms = await loadRooms();
-      if (!rooms[code]) {
-        console.warn('[DB:local] updateRoom - room not found', code);
-        return;
+      const apiUrl = getApiUrl();
+      console.log('[DB:remote] updateRoom', { code, keys: Object.keys(updates) });
+      
+      const response = await fetch(`${apiUrl}/tables/rooms/${code}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('[DB:remote] updateRoom failed:', response.status, error);
+        throw new Error(`Failed to update room: ${error}`);
       }
-      rooms[code] = {
-        ...rooms[code],
-        ...updates,
-        updated_at: new Date().toISOString(),
-      };
-      await saveRooms(rooms);
-      console.log('[DB:local] updateRoom', { code, keys: Object.keys(updates) });
+
+      console.log('[DB:remote] updateRoom success');
     },
 
     async createPlayer(id, roomCode, name) {
-      const players = await loadPlayers();
+      const apiUrl = getApiUrl();
       const playerData: DBPlayer = {
         id,
         room_code: roomCode,
@@ -137,63 +138,118 @@ const createLocalDBAdapter = (): DBAdapter => {
         team: null,
         role: 'spectator',
         is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       };
-      players[id] = playerData;
-      await savePlayers(players);
-      console.log('[DB:local] createPlayer', { id, roomCode });
-      return playerData;
+
+      console.log('[DB:remote] createPlayer', { id, roomCode });
+      const response = await fetch(`${apiUrl}/tables/players/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(playerData),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('[DB:remote] createPlayer failed:', response.status, error);
+        throw new Error(`Failed to create player: ${error}`);
+      }
+
+      const result = await response.json();
+      console.log('[DB:remote] createPlayer success');
+      return result;
     },
 
     async getPlayer(id) {
-      const players = await loadPlayers();
-      const player = players[id] || null;
-      console.log('[DB:local] getPlayer', { id, found: Boolean(player) });
-      return player;
+      const apiUrl = getApiUrl();
+      console.log('[DB:remote] getPlayer', { id });
+      
+      const response = await fetch(`${apiUrl}/tables/players/${id}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (response.status === 404) {
+        console.log('[DB:remote] getPlayer - player not found');
+        return null;
+      }
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('[DB:remote] getPlayer failed:', response.status, error);
+        throw new Error(`Failed to get player: ${error}`);
+      }
+
+      const result = await response.json();
+      console.log('[DB:remote] getPlayer success');
+      return result;
     },
 
     async updatePlayer(id, updates) {
-      const players = await loadPlayers();
-      if (!players[id]) {
-        console.warn('[DB:local] updatePlayer - player not found', id);
-        return;
+      const apiUrl = getApiUrl();
+      console.log('[DB:remote] updatePlayer', { id, keys: Object.keys(updates) });
+      
+      const response = await fetch(`${apiUrl}/tables/players/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('[DB:remote] updatePlayer failed:', response.status, error);
+        throw new Error(`Failed to update player: ${error}`);
       }
-      players[id] = {
-        ...players[id],
-        ...updates,
-        updated_at: new Date().toISOString(),
-      };
-      await savePlayers(players);
-      console.log('[DB:local] updatePlayer', { id, keys: Object.keys(updates) });
+
+      console.log('[DB:remote] updatePlayer success');
     },
 
     async getPlayersByRoom(roomCode) {
+      const apiUrl = getApiUrl();
+      console.log('[DB:remote] getPlayersByRoom', { roomCode });
+      
       try {
-        const players = await loadPlayers();
-        const roomPlayers = Object.values(players).filter(
-          (p) => p.room_code === roomCode && p.is_active
-        );
-        console.log('[DB:local] getPlayersByRoom', { roomCode, count: roomPlayers.length });
-        return roomPlayers;
+        const response = await fetch(`${apiUrl}/tables/players?room_code=${roomCode}&is_active=true`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (!response.ok) {
+          const error = await response.text();
+          console.error('[DB:remote] getPlayersByRoom failed:', response.status, error);
+          return [];
+        }
+
+        const result = await response.json();
+        console.log('[DB:remote] getPlayersByRoom success, count:', result.length);
+        return result;
       } catch (error) {
-        console.error('[DB:local] getPlayersByRoom error:', error);
+        console.error('[DB:remote] getPlayersByRoom error:', error);
         return [];
       }
     },
 
     async deletePlayer(id) {
-      const players = await loadPlayers();
-      delete players[id];
-      await savePlayers(players);
-      console.log('[DB:local] deletePlayer', { id });
+      const apiUrl = getApiUrl();
+      console.log('[DB:remote] deletePlayer', { id });
+      
+      const response = await fetch(`${apiUrl}/tables/players/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('[DB:remote] deletePlayer failed:', response.status, error);
+        throw new Error(`Failed to delete player: ${error}`);
+      }
+
+      console.log('[DB:remote] deletePlayer success');
     },
   };
 
   return adapter;
 };
 
-const adapter: DBAdapter = createLocalDBAdapter();
+const adapter: DBAdapter = createRemoteDBAdapter();
 
 export const db: DBAdapter = adapter;
 export type { DBRoom, DBPlayer };
