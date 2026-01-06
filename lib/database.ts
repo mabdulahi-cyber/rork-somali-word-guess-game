@@ -45,9 +45,12 @@ interface DBAdapter {
 
 const createRemoteDBAdapter = (): DBAdapter => {
   const getApiUrl = () => {
+    // In Rork preview: use system-provided URL
+    // In Netlify/production: use relative /api path (works with netlify.toml redirect)
     const baseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL || '/api';
-    console.log('[DB:remote] Using API URL:', baseUrl);
-    return baseUrl.replace(/\/$/, '');
+    const cleanUrl = baseUrl.replace(/\/$/, '');
+    console.log('[DB:remote] Using API URL:', cleanUrl, '(from env:', !!process.env.EXPO_PUBLIC_RORK_API_BASE_URL, ')');
+    return cleanUrl;
   };
 
   const adapter: DBAdapter = {
