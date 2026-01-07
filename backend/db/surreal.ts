@@ -16,7 +16,7 @@ const getConfig = () => {
       hasNamespace: !!namespace, 
       hasToken: !!token 
     });
-    throw new Error('Database not configured. This app requires Rork system environment variables and cannot run in external deployments like Netlify.');
+    throw new Error('Database not configured. Please set EXPO_PUBLIC_RORK_DB_ENDPOINT, EXPO_PUBLIC_RORK_DB_NAMESPACE, and EXPO_PUBLIC_RORK_DB_TOKEN environment variables in your deployment platform (Netlify/Vercel) settings.');
   }
 
   return { endpoint, namespace, token };
